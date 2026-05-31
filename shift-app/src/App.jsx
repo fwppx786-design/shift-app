@@ -4,7 +4,6 @@ import { doc, setDoc, onSnapshot } from 'firebase/firestore'
 
 const LIFF_ID = '2010241032-ZZnZ4cSu'
 const ADMIN_USER_ID = 'U929c1383c51e8e5b0e2f2d7965d414db'
-const LINE_TOKEN = import.meta.env.VITE_LINE_CHANNEL_ACCESS_TOKEN
 
 const STAFF_COLORS = [
   { bg: '#FF6B6B', light: '#FFE5E5' },
@@ -18,8 +17,7 @@ const STAFF_COLORS = [
 const TIME_SLOTS = [
   '8:00','8:30','9:00','9:30','10:00','10:30','11:00','11:30',
   '12:00','12:30','13:00','13:30','14:00','14:30','15:00','15:30',
-  '16:00','16:30','17:00','17:30','18:00','18:30','19:00','19:30',
-  '20:00','20:30','21:00','21:30','22:00',
+  '16:00','16:30','17:00','17:30','18:00',
 ]
 
 const WEEKDAYS = ['日','月','火','水','木','金','土']
@@ -34,31 +32,6 @@ function calcHours(start, end, hasBreak) {
   const [h2,m2] = end.split(':').map(Number)
   const hours = (h2*60+m2-h1*60-m1)/60
   return hasBreak ? Math.max(0, hours - 1) : hours
-}
-
-async function sendLineNotify(message) {
-  try {
-    await fetch('/api/notify', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message })
-    })
-  } catch(e) {
-    console.error('LINE通知エラー:', e)
-  }
-}
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${LINE_TOKEN}`,
-      },
-      body: JSON.stringify({
-        messages: [{ type: 'text', text: message }]
-      })
-    })
-  } catch(e) {
-    console.error('LINE通知エラー:', e)
-  }
 }
 
 export default function App() {
@@ -161,8 +134,6 @@ export default function App() {
     if (lineUserId) localStorage.setItem('myStaffId_' + lineUserId, String(newId))
     setRegisterName('')
     setRegisterError('')
-    // 管理者に通知
-    await sendLineNotify(`📢 新しいスタッフが登録されました！\n名前：${name}`)
   }
 
   function getShiftsForDate(d) { return shifts[dateKey(year, month, d)] || [] }
