@@ -1,11 +1,9 @@
 import { useState, useEffect } from 'react'
 import { db } from './firebase'
-import {
-  doc, getDoc, setDoc, onSnapshot, collection,
-  getDocs, deleteDoc
-} from 'firebase/firestore'
+import { doc, setDoc, onSnapshot } from 'firebase/firestore'
 
-// ─── Constants ───────────────────────────────────────────────────────────────
+const LIFF_ID = '2010241032-ZZnZ4cSu'
+
 const STAFF_COLORS = [
   { bg: '#FF6B6B', light: '#FFE5E5' },
   { bg: '#4ECDC4', light: '#E0F7F6' },
@@ -29,28 +27,41 @@ function dateKey(y, m, d) {
   return `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`
 }
 
-// ─── App ─────────────────────────────────────────────────────────────────────
 export default function App() {
   const today = new Date()
   const [year, setYear]   = useState(today.getFullYear())
   const [month, setMonth] = useState(today.getMonth())
-  const [shifts, setShifts] = useState({})   // { "2025-06-01": [{id,staffId,start,end}] }
+  const [shifts, setShifts] = useState({})
   const [staff,  setStaff]  = useState([])
   const [modal,  setModal]  = useState(null)
   const [newStaffName, setNewStaffName] = useState('')
   const [shiftForm, setShiftForm] = useState({ staffId: '', start: '9:00', end: '17:00' })
   const [view, setView] = useState('month')
   const [loading, setLoading] = useState(true)
-  const [syncStatus, setSyncStatus] = useState('synced') // synced | saving | error
+  const [syncStatus, setSyncStatus] = useState('synced')
+  const [lineUser, setLineUser] = useState(null)
 
-  // ── Firestore: real-time listeners ───────────────────────────────────────
   useEffect(() => {
-    // Staff listener
+    if (typeof liff !== 'undefined') {
+      liff.init({ liffId: LIFF_ID })
+        .then(() => {
+          if (liff.isLoggedIn()) {
+            liff.getProfile().then(profile => {
+              setLineUser({ name: profile.displayName, picture: profile.pictureUrl })
+            })
+          } else {
+            liff.login()
+          }
+        })
+        .catch(err => console.error('LIFF init error:', err))
+    }
+  }, [])
+
+  useEffect(() => {
     const unsubStaff = onSnapshot(doc(db, 'app', 'staff'), snap => {
       if (snap.exists()) {
         setStaff(snap.data().list || [])
       } else {
-        // First time: seed default staff
         const defaults = [
           { id: 1, name: '田中 花子', colorIdx: 0 },
           { id: 2, name: '鈴木 太郎', colorIdx: 1 },
@@ -61,7 +72,6 @@ export default function App() {
       setLoading(false)
     }, err => { console.error(err); setLoading(false) })
 
-    // Shifts listener
     const unsubShifts = onSnapshot(doc(db, 'app', 'shifts'), snap => {
       if (snap.exists()) setShifts(snap.data().data || {})
       else setShifts({})
@@ -70,7 +80,6 @@ export default function App() {
     return () => { unsubStaff(); unsubShifts() }
   }, [])
 
-  // ── Helpers ───────────────────────────────────────────────────────────────
   async function saveShifts(updated) {
     setSyncStatus('saving')
     try {
@@ -90,7 +99,6 @@ export default function App() {
   function getShiftsForDate(d) { return shifts[dateKey(year, month, d)] || [] }
   function getStaffById(id)    { return staff.find(s => s.id === id) }
 
-  // ── Navigation ────────────────────────────────────────────────────────────
   function prevMonth() {
     if (month === 0) { setMonth(11); setYear(y => y - 1) }
     else setMonth(m => m - 1)
@@ -100,7 +108,6 @@ export default function App() {
     else setMonth(m => m + 1)
   }
 
-  // ── Shift CRUD ────────────────────────────────────────────────────────────
   async function addShift() {
     if (!shiftForm.staffId) return
     const key = dateKey(year, month, modal.day)
@@ -123,7 +130,6 @@ export default function App() {
     await saveShifts(updated)
   }
 
-  // ── Staff CRUD ────────────────────────────────────────────────────────────
   async function addStaff() {
     if (!newStaffName.trim()) return
     const usedColors = staff.map(s => s.colorIdx)
@@ -145,7 +151,6 @@ export default function App() {
     await Promise.all([saveStaff(updatedStaff), saveShifts(updatedShifts)])
   }
 
-  // ── Staff monthly summary ─────────────────────────────────────────────────
   const daysInMonth = getDaysInMonth(year, month)
   const firstDay    = getFirstDay(year, month)
 
@@ -161,7 +166,6 @@ export default function App() {
   }
   const staffSummary = getStaffMonthShifts()
 
-  // ── Calendar grid ─────────────────────────────────────────────────────────
   const cells = []
   for (let i = 0; i < firstDay; i++) cells.push(null)
   for (let d = 1; d <= daysInMonth; d++) cells.push(d)
@@ -177,7 +181,6 @@ export default function App() {
     error:  { bg: '#FF6B6B', label: '⚠ エラー' },
   }[syncStatus]
 
-  // ─── Loading ──────────────────────────────────────────────────────────────
   if (loading) return (
     <div style={{ minHeight: '100vh', background: '#F8F6F1', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <div style={{ textAlign: 'center' }}>
@@ -187,19 +190,20 @@ export default function App() {
     </div>
   )
 
-  // ─── Render ───────────────────────────────────────────────────────────────
   return (
     <div style={{ minHeight: '100vh', background: '#F8F6F1', color: '#2D2A26' }}>
-
-      {/* ── Header ── */}
       <div style={{ background: '#2D2A26', color: '#F8F6F1', padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 2px 12px rgba(0,0,0,0.18)', flexWrap: 'wrap', gap: 8 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <span style={{ fontSize: 22, fontWeight: 800, letterSpacing: 2 }}>📅 シフト管理</span>
-          <span style={{ background: syncBadge.bg, color: '#2D2A26', borderRadius: 20, padding: '3px 10px', fontSize: 11, fontWeight: 700 }}>
-            {syncBadge.label}
-          </span>
+          <span style={{ background: syncBadge.bg, color: '#2D2A26', borderRadius: 20, padding: '3px 10px', fontSize: 11, fontWeight: 700 }}>{syncBadge.label}</span>
         </div>
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          {lineUser && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              {lineUser.picture && <img src={lineUser.picture} style={{ width: 28, height: 28, borderRadius: '50%' }} />}
+              <span style={{ fontSize: 12, fontWeight: 600 }}>{lineUser.name}</span>
+            </div>
+          )}
           {['month','staff'].map(v => (
             <button key={v} onClick={() => setView(v)} style={{
               padding: '5px 14px', borderRadius: 20, border: 'none',
@@ -218,24 +222,15 @@ export default function App() {
         </div>
       </div>
 
-      {/* ── Notice ── */}
-      <div style={{ background: '#E0F7F6', borderBottom: '1px solid #4ECDC4', padding: '8px 20px', fontSize: 12, color: '#2D2A26' }}>
-        🌐 <strong>リアルタイム共有：</strong>全員の変更が即座に反映されます（Firebase使用）
-      </div>
-
       <div style={{ maxWidth: 920, margin: '0 auto', padding: '20px 14px' }}>
-
-        {/* ── Month nav ── */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, marginBottom: 20 }}>
           <button onClick={prevMonth} style={{ background: '#2D2A26', color: '#F8F6F1', border: 'none', borderRadius: '50%', width: 34, height: 34, fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>‹</button>
           <span style={{ fontSize: 20, fontWeight: 800, letterSpacing: 2 }}>{year}年 {month+1}月</span>
           <button onClick={nextMonth} style={{ background: '#2D2A26', color: '#F8F6F1', border: 'none', borderRadius: '50%', width: 34, height: 34, fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>›</button>
         </div>
 
-        {/* ── Calendar view ── */}
         {view === 'month' && (
           <>
-            {/* Legend */}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>
               {staff.map(s => (
                 <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 5, background: '#fff', border: `2px solid ${STAFF_COLORS[s.colorIdx].bg}`, borderRadius: 20, padding: '3px 10px', fontSize: 12, fontWeight: 600 }}>
@@ -244,8 +239,6 @@ export default function App() {
                 </div>
               ))}
             </div>
-
-            {/* Grid */}
             <div style={{ background: '#fff', borderRadius: 14, overflow: 'hidden', boxShadow: '0 2px 18px rgba(0,0,0,0.08)' }}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)' }}>
                 {WEEKDAYS.map((d, i) => (
@@ -300,7 +293,6 @@ export default function App() {
           </>
         )}
 
-        {/* ── Staff view ── */}
         {view === 'staff' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             {staff.map(s => {
@@ -338,12 +330,10 @@ export default function App() {
         )}
       </div>
 
-      {/* ── Modals ── */}
       {modal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(45,42,38,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}
           onClick={e => { if (e.target === e.currentTarget) setModal(null) }}>
           <div style={{ background: '#fff', borderRadius: 16, padding: '24px 28px', minWidth: 300, maxWidth: 400, boxShadow: '0 8px 40px rgba(0,0,0,0.18)' }}>
-
             {modal.type === 'add' && (
               <>
                 <h3 style={{ margin: '0 0 18px', fontSize: 17, fontWeight: 800 }}>{month+1}月{modal.day}日 シフト追加</h3>
@@ -371,7 +361,6 @@ export default function App() {
                 </div>
               </>
             )}
-
             {modal.type === 'staffEdit' && (
               <>
                 <h3 style={{ margin: '0 0 16px', fontSize: 17, fontWeight: 800 }}>スタッフ管理</h3>
@@ -398,7 +387,6 @@ export default function App() {
                 </div>
               </>
             )}
-
           </div>
         </div>
       )}
