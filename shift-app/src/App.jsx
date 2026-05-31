@@ -85,6 +85,19 @@ export default function App() {
       setStaffLoaded(true)
       setLoading(false)
       setMyStaffId(prev => {
+  if (prev && !list.some(s => s.id === prev)) {
+    // 全てのlocalStorageキーをチェックしてリセット
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i)
+      if (key && key.startsWith('myStaffId_')) {
+        localStorage.removeItem(key)
+        i--
+      }
+    }
+    return null
+  }
+  return prev
+})
         if (prev && !list.some(s => s.id === prev)) {
           Object.keys(localStorage).forEach(key => {
             if (key.startsWith('myStaffId_') && localStorage.getItem(key) === String(prev)) {
