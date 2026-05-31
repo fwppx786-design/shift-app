@@ -41,7 +41,6 @@ export default function App() {
   const [shifts, setShifts] = useState({})
   const [staff, setStaff] = useState([])
   const [modal, setModal] = useState(null)
-  const [newStaffName, setNewStaffName] = useState('')
   const [shiftForm, setShiftForm] = useState({ staffId: '', start: '9:00', end: '17:00', hasBreak: true })
   const [view, setView] = useState('month')
   const [loading, setLoading] = useState(true)
@@ -53,10 +52,12 @@ export default function App() {
   const [registerError, setRegisterError] = useState('')
   const [deleteConfirm, setDeleteConfirm] = useState(null)
   const [liffReady, setLiffReady] = useState(false)
+  const [staffLoaded, setStaffLoaded] = useState(false)
 
   const isAdmin = lineUserId === ADMIN_USER_ID
-  const needsRegister = liffReady && !isAdmin && !myStaffId
+  const needsRegister = liffReady && staffLoaded && !isAdmin && !myStaffId
 
+  // LIFF初期化
   useEffect(() => {
     if (typeof liff !== 'undefined') {
       liff.init({ liffId: LIFF_ID })
@@ -77,15 +78,27 @@ export default function App() {
     }
   }, [])
 
+  // Firestore リアルタイム同期
   useEffect(() => {
     const unsubStaff = onSnapshot(doc(db, 'app', 'staff'), snap => {
-      if (snap.exists()) {
-        setStaff(snap.data().list || [])
-      } else {
-        setStaff([])
-        setDoc(doc(db, 'app', 'staff'), { list: [] })
-      }
+      const list = snap.exists() ? (snap.data().list || []) : []
+      setStaff(list)
+      setStaffLoaded(true)
       setLoading(false)
+
+      // 自分のスタッフIDがリストから削除されていたらリセット
+      setMyStaffId(prev => {
+        if (prev && !list.some(s => s.id === prev)) {
+          // localStorageも消す（lineUserIdはここでは参照できないのでキー全体を探す）
+          Object.keys(localStorage).forEach(key => {
+            if (key.startsWith('myStaffId_') && localStorage.getItem(key) === String(prev)) {
+              localStorage.removeItem(key)
+            }
+          })
+          return null
+        }
+        return prev
+      })
     }, err => { console.error(err); setLoading(false) })
 
     const unsubShifts = onSnapshot(doc(db, 'app', 'shifts'), snap => {
@@ -129,12 +142,10 @@ export default function App() {
 
   function getShiftsForDate(d) { return shifts[dateKey(year, month, d)] || [] }
   function getStaffById(id) { return staff.find(s => s.id === id) }
-
   function canEditShift(sh) {
     if (isAdmin) return true
     return myStaffId && sh.staffId === myStaffId
   }
-
   function hasShiftOnDay(day, staffId) {
     return getShiftsForDate(day).some(sh => sh.staffId === staffId)
   }
@@ -236,7 +247,7 @@ export default function App() {
           onChange={e => { setRegisterName(e.target.value); setRegisterError('') }}
           onKeyDown={e => { if (e.key === 'Enter') registerStaff() }}
           placeholder="例：田中 花子"
-          style={{ width: '100%', padding: '12px 14px', borderRadius: 10, border: `1.5px solid ${registerError ? '#FF6B6B' : '#ddd'}`, fontSize: 15, marginBottom: 8 }}
+          style={{ width: '100%', padding: '12px 14px', borderRadius: 10, border: `1.5px solid ${registerError ? '#FF6B6B' : '#ddd'}`, fontSize: 15, marginBottom: 8, boxSizing: 'border-box' }}
         />
         {registerError && <p style={{ color: '#FF6B6B', fontSize: 12, marginBottom: 8 }}>{registerError}</p>}
         <button onClick={registerStaff} style={{
@@ -497,7 +508,7 @@ export default function App() {
                     </div>
                   ))}
                 </div>
-                <p style={{ fontSize: 12, color: '#999', marginBottom: 8 }}>※ スタッフは自分で名前を入力して登録します</p>
+                <p style={{ fontSize: 12, color: '#999', marginBottom: 12 }}>※ スタッフは自分で名前を入力して登録します</p>
                 <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                   <button onClick={() => setModal(null)} style={{ padding: '7px 20px', borderRadius: 7, border: '1.5px solid #ddd', background: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>閉じる</button>
                 </div>
