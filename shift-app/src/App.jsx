@@ -56,7 +56,10 @@ export default function App() {
   const [dayDetail, setDayDetail] = useState(null)
 
   const isAdmin = lineUserId === ADMIN_USER_ID
-  const needsRegister = liffReady && staffLoaded && !isAdmin && !myStaffId
+
+  // LINE User IDからスタッフを検索
+  const myStaff = staff.find(s => s.lineUserId === lineUserId)
+  const needsRegister = liffReady && staffLoaded && !isAdmin && !myStaff
 
   useEffect(() => {
     if (typeof liff !== 'undefined') {
@@ -66,8 +69,6 @@ export default function App() {
             liff.getProfile().then(profile => {
               setLineUser({ name: profile.displayName, picture: profile.pictureUrl })
               setLineUserId(profile.userId)
-              const saved = localStorage.getItem('myStaffId_' + profile.userId)
-              if (saved) setMyStaffId(Number(saved))
               setLiffReady(true)
             })
           } else {
@@ -84,30 +85,6 @@ export default function App() {
       setStaff(list)
       setStaffLoaded(true)
       setLoading(false)
-      setMyStaffId(prev => {
-  if (prev && !list.some(s => s.id === prev)) {
-    // 全てのlocalStorageキーをチェックしてリセット
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i)
-      if (key && key.startsWith('myStaffId_')) {
-        localStorage.removeItem(key)
-        i--
-      }
-    }
-    return null
-  }
-  return prev
-})
-        if (prev && !list.some(s => s.id === prev)) {
-          Object.keys(localStorage).forEach(key => {
-            if (key.startsWith('myStaffId_') && localStorage.getItem(key) === String(prev)) {
-              localStorage.removeItem(key)
-            }
-          })
-          return null
-        }
-        return prev
-      })
     }, err => { console.error(err); setLoading(false) })
 
     const unsubShifts = onSnapshot(doc(db, 'app', 'shifts'), snap => {
@@ -141,19 +118,18 @@ export default function App() {
     const usedColors = staff.map(s => s.colorIdx)
     const colorIdx = [0,1,2,3,4,5].find(i => !usedColors.includes(i)) ?? staff.length % 6
     const newId = Date.now()
-    const updated = [...staff, { id: newId, name, colorIdx }]
+    const updated = [...staff, { id: newId, name, colorIdx, lineUserId }]
     await saveStaff(updated)
-    setMyStaffId(newId)
-    if (lineUserId) localStorage.setItem('myStaffId_' + lineUserId, String(newId))
     setRegisterName('')
     setRegisterError('')
   }
 
   function getShiftsForDate(d) { return shifts[dateKey(year, month, d)] || [] }
   function getStaffById(id) { return staff.find(s => s.id === id) }
+
   function canEditShift(sh) {
     if (isAdmin) return true
-    return myStaffId && sh.staffId === myStaffId
+    return myStaff && sh.staffId === myStaff.id
   }
   function hasShiftOnDay(day, staffId) {
     return getShiftsForDate(day).some(sh => sh.staffId === staffId)
@@ -171,7 +147,7 @@ export default function App() {
   async function addShift() {
     if (!shiftForm.staffId) return
     const staffId = Number(shiftForm.staffId)
-    if (!isAdmin && myStaffId !== staffId) return
+    if (!isAdmin && myStaff?.id !== staffId) return
     if (hasShiftOnDay(modal.day, staffId)) {
       alert('この日はすでにシフトが入っています')
       return
@@ -243,6 +219,7 @@ export default function App() {
     error:  { bg: '#FF6B6B', label: '⚠ エラー' },
   }[syncStatus]
 
+  // 名前登録画面
   if (needsRegister) return (
     <div style={{ minHeight: '100vh', background: '#F8F6F1', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
       <div style={{ background: '#fff', borderRadius: 16, padding: '32px 24px', width: '100%', maxWidth: 340, boxShadow: '0 4px 24px rgba(0,0,0,0.1)' }}>
@@ -326,7 +303,7 @@ export default function App() {
                 <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 5, background: '#fff', border: `2px solid ${STAFF_COLORS[s.colorIdx].bg}`, borderRadius: 20, padding: '3px 10px', fontSize: 12, fontWeight: 600 }}>
                   <span style={{ width: 9, height: 9, borderRadius: '50%', background: STAFF_COLORS[s.colorIdx].bg, display: 'inline-block' }} />
                   {s.name}
-                  {myStaffId === s.id && !isAdmin && <span style={{ fontSize: 10, color: '#888' }}>（自分）</span>}
+                  {myStaff?.id === s.id && !isAdmin && <span style={{ fontSize: 10, color: '#888' }}>（自分）</span>}
                 </div>
               ))}
             </div>
@@ -340,7 +317,7 @@ export default function App() {
                 {cells.map((day, idx) => {
                   const dow = idx % 7
                   const dayShifts = day ? getShiftsForDate(day) : []
-                  const canAdd = day && (isAdmin || (!!myStaffId && !hasShiftOnDay(day, myStaffId)))
+                  const canAdd = day && (isAdmin || (!!myStaff && !hasShiftOnDay(day, myStaff.id)))
                   return (
                     <div key={idx} onClick={() => day && setDayDetail(day)}
                       style={{ background: day ? '#fff' : '#F5F3EE', minHeight: 80, padding: 4, overflow: 'hidden', minWidth: 0, cursor: day ? 'pointer' : 'default' }}>
@@ -357,7 +334,7 @@ export default function App() {
                             {canAdd && (
                               <button onClick={e => {
                                 e.stopPropagation()
-                                const defaultStaffId = isAdmin ? (staff[0]?.id || '') : myStaffId
+                                const defaultStaffId = isAdmin ? (staff[0]?.id || '') : myStaff?.id
                                 setShiftForm({ staffId: defaultStaffId, start: '9:00', end: '17:00', hasBreak: true })
                                 setModal({ type: 'add', day })
                               }} style={{
@@ -471,10 +448,10 @@ export default function App() {
                 })}
               </div>
             )}
-            {(isAdmin || (!!myStaffId && !hasShiftOnDay(dayDetail, myStaffId))) && (
+            {(isAdmin || (!!myStaff && !hasShiftOnDay(dayDetail, myStaff.id))) && (
               <button onClick={() => {
                 setDayDetail(null)
-                const defaultStaffId = isAdmin ? (staff[0]?.id || '') : myStaffId
+                const defaultStaffId = isAdmin ? (staff[0]?.id || '') : myStaff?.id
                 setShiftForm({ staffId: defaultStaffId, start: '9:00', end: '17:00', hasBreak: true })
                 setModal({ type: 'add', day: dayDetail })
               }} style={{
@@ -523,7 +500,7 @@ export default function App() {
                   )}
                   {!isAdmin && (
                     <div style={{ background: '#F8F6F1', borderRadius: 8, padding: '8px 12px', fontSize: 13, fontWeight: 600 }}>
-                      {getStaffById(myStaffId)?.name} のシフトを追加
+                      {myStaff?.name} のシフトを追加
                     </div>
                   )}
                   <div style={{ display: 'flex', gap: 10 }}>
