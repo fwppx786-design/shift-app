@@ -49,10 +49,13 @@ export default function App() {
   const [lineUser, setLineUser] = useState(null)
   const [lineUserId, setLineUserId] = useState(null)
   const [myStaffId, setMyStaffId] = useState(null)
-  const [selectingName, setSelectingName] = useState(false)
-  const [deleteConfirm, setDeleteConfirm] = useState(null) // { day, shiftId, staffId, name }
+  const [registerName, setRegisterName] = useState('')
+  const [registerError, setRegisterError] = useState('')
+  const [deleteConfirm, setDeleteConfirm] = useState(null)
+  const [liffReady, setLiffReady] = useState(false)
 
   const isAdmin = lineUserId === ADMIN_USER_ID
+  const needsRegister = liffReady && !isAdmin && !myStaffId
 
   useEffect(() => {
     if (typeof liff !== 'undefined') {
@@ -64,7 +67,7 @@ export default function App() {
               setLineUserId(profile.userId)
               const saved = localStorage.getItem('myStaffId_' + profile.userId)
               if (saved) setMyStaffId(Number(saved))
-              else if (profile.userId !== ADMIN_USER_ID) setSelectingName(true)
+              setLiffReady(true)
             })
           } else {
             liff.login()
@@ -79,12 +82,8 @@ export default function App() {
       if (snap.exists()) {
         setStaff(snap.data().list || [])
       } else {
-        const defaults = [
-          { id: 1, name: '田中 花子', colorIdx: 0 },
-          { id: 2, name: '鈴木 太郎', colorIdx: 1 },
-        ]
-        setDoc(doc(db, 'app', 'staff'), { list: defaults })
-        setStaff(defaults)
+        setStaff([])
+        setDoc(doc(db, 'app', 'staff'), { list: [] })
       }
       setLoading(false)
     }, err => { console.error(err); setLoading(false) })
@@ -113,14 +112,19 @@ export default function App() {
     } catch { setSyncStatus('error') }
   }
 
-  function selectMyName(staffId) {
-    setMyStaffId(staffId)
-    if (lineUserId) localStorage.setItem('myStaffId_' + lineUserId, String(staffId))
-    setSelectingName(false)
-  }
-
-  function changeMyName() {
-    setSelectingName(true)
+  async function registerStaff() {
+    const name = registerName.trim()
+    if (!name) { setRegisterError('名前を入力してください'); return }
+    if (staff.some(s => s.name === name)) { setRegisterError('この名前はすでに登録されています'); return }
+    const usedColors = staff.map(s => s.colorIdx)
+    const colorIdx = [0,1,2,3,4,5].find(i => !usedColors.includes(i)) ?? staff.length % 6
+    const newId = Date.now()
+    const updated = [...staff, { id: newId, name, colorIdx }]
+    await saveStaff(updated)
+    setMyStaffId(newId)
+    if (lineUserId) localStorage.setItem('myStaffId_' + lineUserId, String(newId))
+    setRegisterName('')
+    setRegisterError('')
   }
 
   function getShiftsForDate(d) { return shifts[dateKey(year, month, d)] || [] }
@@ -132,8 +136,7 @@ export default function App() {
   }
 
   function hasShiftOnDay(day, staffId) {
-    const dayShifts = getShiftsForDate(day)
-    return dayShifts.some(sh => sh.staffId === staffId)
+    return getShiftsForDate(day).some(sh => sh.staffId === staffId)
   }
 
   function prevMonth() {
@@ -149,21 +152,12 @@ export default function App() {
     if (!shiftForm.staffId) return
     const staffId = Number(shiftForm.staffId)
     if (!isAdmin && myStaffId !== staffId) return
-
-    // 重複チェック
     if (hasShiftOnDay(modal.day, staffId)) {
       alert('この日はすでにシフトが入っています')
       return
     }
-
     const key = dateKey(year, month, modal.day)
-    const newShift = {
-      id: Date.now(),
-      staffId,
-      start: shiftForm.start,
-      end: shiftForm.end,
-      hasBreak: shiftForm.hasBreak,
-    }
+    const newShift = { id: Date.now(), staffId, start: shiftForm.start, end: shiftForm.end, hasBreak: shiftForm.hasBreak }
     const updated = { ...shifts, [key]: [...(shifts[key] || []), newShift] }
     setShifts(updated)
     setModal(null)
@@ -184,16 +178,6 @@ export default function App() {
     setShifts(updated)
     setDeleteConfirm(null)
     await saveShifts(updated)
-  }
-
-  async function addStaff() {
-    if (!newStaffName.trim() || !isAdmin) return
-    const usedColors = staff.map(s => s.colorIdx)
-    const colorIdx = [0,1,2,3,4,5].find(i => !usedColors.includes(i)) ?? staff.length % 6
-    const updated = [...staff, { id: Date.now(), name: newStaffName.trim(), colorIdx }]
-    setStaff(updated)
-    setNewStaffName('')
-    await saveStaff(updated)
   }
 
   async function removeStaff(id) {
@@ -238,38 +222,28 @@ export default function App() {
     error:  { bg: '#FF6B6B', label: '⚠ エラー' },
   }[syncStatus]
 
-  // 名前選択画面
-  if (selectingName) return (
+  // 名前登録画面
+  if (needsRegister) return (
     <div style={{ minHeight: '100vh', background: '#F8F6F1', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-      <div style={{ background: '#fff', borderRadius: 16, padding: '28px 24px', width: '100%', maxWidth: 340, boxShadow: '0 4px 24px rgba(0,0,0,0.1)' }}>
-        <div style={{ fontSize: 32, textAlign: 'center', marginBottom: 8 }}>👋</div>
-        <h2 style={{ textAlign: 'center', fontSize: 18, fontWeight: 800, marginBottom: 6 }}>
-          {myStaffId ? '名前を変更する' : 'はじめまして！'}
-        </h2>
-        <p style={{ textAlign: 'center', fontSize: 13, color: '#666', marginBottom: 20 }}>あなたの名前を選んでください</p>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {staff.map(s => (
-            <button key={s.id} onClick={() => selectMyName(s.id)} style={{
-              padding: '12px 16px', borderRadius: 10,
-              border: `2px solid ${myStaffId === s.id ? '#2D2A26' : STAFF_COLORS[s.colorIdx].bg}`,
-              background: myStaffId === s.id ? '#2D2A26' : STAFF_COLORS[s.colorIdx].light,
-              cursor: 'pointer', fontSize: 15, fontWeight: 700,
-              color: myStaffId === s.id ? '#fff' : '#2D2A26',
-              display: 'flex', alignItems: 'center', gap: 10,
-            }}>
-              <span style={{ width: 12, height: 12, borderRadius: '50%', background: STAFF_COLORS[s.colorIdx].bg, display: 'inline-block' }} />
-              {s.name}
-              {myStaffId === s.id && <span style={{ marginLeft: 'auto', fontSize: 12 }}>✓ 現在</span>}
-            </button>
-          ))}
-        </div>
-        {myStaffId && (
-          <button onClick={() => setSelectingName(false)} style={{
-            width: '100%', marginTop: 16, padding: '10px', borderRadius: 10,
-            border: '1.5px solid #ddd', background: '#fff', cursor: 'pointer',
-            fontSize: 13, fontWeight: 600, color: '#666',
-          }}>キャンセル</button>
-        )}
+      <div style={{ background: '#fff', borderRadius: 16, padding: '32px 24px', width: '100%', maxWidth: 340, boxShadow: '0 4px 24px rgba(0,0,0,0.1)' }}>
+        <div style={{ fontSize: 40, textAlign: 'center', marginBottom: 10 }}>👋</div>
+        <h2 style={{ textAlign: 'center', fontSize: 18, fontWeight: 800, marginBottom: 6 }}>はじめまして！</h2>
+        <p style={{ textAlign: 'center', fontSize: 13, color: '#666', marginBottom: 24 }}>
+          あなたの名前を入力して<br />スタッフ登録してください
+        </p>
+        <input
+          value={registerName}
+          onChange={e => { setRegisterName(e.target.value); setRegisterError('') }}
+          onKeyDown={e => { if (e.key === 'Enter') registerStaff() }}
+          placeholder="例：田中 花子"
+          style={{ width: '100%', padding: '12px 14px', borderRadius: 10, border: `1.5px solid ${registerError ? '#FF6B6B' : '#ddd'}`, fontSize: 15, marginBottom: 8 }}
+        />
+        {registerError && <p style={{ color: '#FF6B6B', fontSize: 12, marginBottom: 8 }}>{registerError}</p>}
+        <button onClick={registerStaff} style={{
+          width: '100%', padding: '13px', borderRadius: 10, border: 'none',
+          background: '#2D2A26', color: '#F8F6F1', cursor: 'pointer',
+          fontSize: 15, fontWeight: 700,
+        }}>登録する</button>
       </div>
     </div>
   )
@@ -314,13 +288,6 @@ export default function App() {
               background: 'rgba(255,255,255,0.13)', color: '#F8F6F1',
               fontWeight: 700, cursor: 'pointer', fontSize: 12,
             }}>⚙ スタッフ管理</button>
-          )}
-          {!isAdmin && myStaffId && (
-            <button onClick={changeMyName} style={{
-              padding: '5px 12px', borderRadius: 20, border: 'none',
-              background: 'rgba(255,255,255,0.13)', color: '#F8F6F1',
-              fontWeight: 700, cursor: 'pointer', fontSize: 12,
-            }}>✏️ 名前変更</button>
           )}
         </div>
       </div>
@@ -530,14 +497,8 @@ export default function App() {
                     </div>
                   ))}
                 </div>
-                <div style={{ display: 'flex', gap: 7 }}>
-                  <input value={newStaffName} onChange={e => setNewStaffName(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') addStaff() }}
-                    placeholder="新しいスタッフ名"
-                    style={{ flex: 1, padding: '7px 10px', borderRadius: 7, border: '1.5px solid #ddd', fontSize: 13 }} />
-                  <button onClick={addStaff} style={{ padding: '7px 14px', borderRadius: 7, border: 'none', background: '#2D2A26', color: '#F8F6F1', cursor: 'pointer', fontSize: 13, fontWeight: 700 }}>追加</button>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 18 }}>
+                <p style={{ fontSize: 12, color: '#999', marginBottom: 8 }}>※ スタッフは自分で名前を入力して登録します</p>
+                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                   <button onClick={() => setModal(null)} style={{ padding: '7px 20px', borderRadius: 7, border: '1.5px solid #ddd', background: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>閉じる</button>
                 </div>
               </>
