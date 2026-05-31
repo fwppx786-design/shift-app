@@ -4,6 +4,7 @@ import { doc, setDoc, onSnapshot } from 'firebase/firestore'
 
 const LIFF_ID = '2010241032-ZZnZ4cSu'
 const ADMIN_USER_ID = 'U929c1383c51e8e5b0e2f2d7965d414db'
+const LINE_TOKEN = import.meta.env.VITE_LINE_CHANNEL_ACCESS_TOKEN
 
 const STAFF_COLORS = [
   { bg: '#FF6B6B', light: '#FFE5E5' },
@@ -33,6 +34,23 @@ function calcHours(start, end, hasBreak) {
   const [h2,m2] = end.split(':').map(Number)
   const hours = (h2*60+m2-h1*60-m1)/60
   return hasBreak ? Math.max(0, hours - 1) : hours
+}
+
+async function sendLineNotify(message) {
+  try {
+    await fetch('https://api.line.me/v2/bot/message/broadcast', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${LINE_TOKEN}`,
+      },
+      body: JSON.stringify({
+        messages: [{ type: 'text', text: message }]
+      })
+    })
+  } catch(e) {
+    console.error('LINE通知エラー:', e)
+  }
 }
 
 export default function App() {
@@ -135,6 +153,8 @@ export default function App() {
     if (lineUserId) localStorage.setItem('myStaffId_' + lineUserId, String(newId))
     setRegisterName('')
     setRegisterError('')
+    // 管理者に通知
+    await sendLineNotify(`📢 新しいスタッフが登録されました！\n名前：${name}`)
   }
 
   function getShiftsForDate(d) { return shifts[dateKey(year, month, d)] || [] }
@@ -355,7 +375,6 @@ export default function App() {
                               }}>+</button>
                             )}
                           </div>
-                          {/* 名前のみ表示 */}
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                             {dayShifts.map(sh => {
                               const s = getStaffById(sh.staffId)
