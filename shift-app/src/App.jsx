@@ -333,7 +333,7 @@ export default function App() {
                   const dayShifts = day ? getShiftsForDate(day) : []
                   const canAdd = day && (isAdmin || (!!myStaffId && !hasShiftOnDay(day, myStaffId)))
                   return (
-                    <div key={idx} style={{ background: day ? '#fff' : '#F5F3EE', minHeight: 86, padding: 5 }}>
+                   <div style={{ background: day ? '#fff' : '#F5F3EE', minHeight: 86, padding: 5, overflow: 'hidden', minWidth: 0 }}>
                       {day && (
                         <>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
