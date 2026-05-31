@@ -332,18 +332,14 @@ export default function App() {
   overflow: 'hidden',
 }}>
               {/* 背景画像 */}
-            <img src='/kusa.png' style={{
-  position: 'absolute',
-  top: 0, left: 0,
-  width: '100%',
-  height: '100%',
-  objectFit: 'cover',
-  opacity: 0.15,
-  pointerEvents: 'none',
-  zIndex: 0,
-}} />
+            
 
-              <div style={{ position: 'relative', zIndex: 1 }}>
+             <div style={{
+  position: 'relative', zIndex: 1,
+  backgroundImage: 'url(/kusa.png)',
+  backgroundSize: 'cover',
+  backgroundPosition: 'center',
+}}>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)' }}>
                   {WEEKDAYS.map((d, i) => (
                     <div key={d} style={{ textAlign: 'center', padding: '9px 0', fontWeight: 700, fontSize: 12, background: '#2D2A26', color: i===0?'#FF6B6B':i===6?'#4ECDC4':'#F8F6F1', letterSpacing: 1 }}>{d}</div>
