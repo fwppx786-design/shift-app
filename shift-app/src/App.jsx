@@ -331,16 +331,16 @@ export default function App() {
               position: 'relative',
             }}>
               {/* 背景画像 */}
-              <div style={{
-                position: 'absolute', inset: 0,
-                backgroundImage: 'url(/kusa.png)',
-                backgroundSize: '60%',
-                backgroundPosition: 'center',
-                backgroundRepeat: 'no-repeat',
-                opacity: 0.15,
-                pointerEvents: 'none',
-                zIndex: 0,
-              }} />
+             <div style={{
+  position: 'absolute', inset: 0,
+  backgroundImage: 'url(/kusa.png)',
+  backgroundSize: '60%',
+  backgroundPosition: 'center',
+  backgroundRepeat: 'no-repeat',
+  opacity: 0.15,
+  pointerEvents: 'none',
+  zIndex: 0,
+}} />
 
               <div style={{ position: 'relative', zIndex: 1 }}>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)' }}>
