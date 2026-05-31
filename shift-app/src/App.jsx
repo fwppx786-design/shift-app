@@ -326,7 +326,7 @@ export default function App() {
 
             {/* カレンダー（背景画像付き） */}
             <div style={{
-              background: '#fff', borderRadius: 14, overflow: 'hidden',
+             background: '#fff', borderRadius: 14,
               boxShadow: '0 2px 18px rgba(0,0,0,0.08)',
               position: 'relative',
             }}>
