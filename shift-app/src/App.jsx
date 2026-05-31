@@ -15,9 +15,10 @@ const STAFF_COLORS = [
 ]
 
 const TIME_SLOTS = [
-  '8:00','9:00','10:00','11:00','12:00','13:00',
-  '14:00','15:00','16:00','17:00','18:00','19:00',
-  '20:00','21:00','22:00',
+  '8:00','8:30','9:00','9:30','10:00','10:30','11:00','11:30',
+  '12:00','12:30','13:00','13:30','14:00','14:30','15:00','15:30',
+  '16:00','16:30','17:00','17:30','18:00','18:30','19:00','19:30',
+  '20:00','20:30','21:00','21:30','22:00',
 ]
 
 const WEEKDAYS = ['日','月','火','水','木','金','土']
@@ -53,7 +54,7 @@ export default function App() {
   const [deleteConfirm, setDeleteConfirm] = useState(null)
   const [liffReady, setLiffReady] = useState(false)
   const [staffLoaded, setStaffLoaded] = useState(false)
-  const [dayDetail, setDayDetail] = useState(null) // 日付詳細ポップアップ
+  const [dayDetail, setDayDetail] = useState(null)
 
   const isAdmin = lineUserId === ADMIN_USER_ID
   const needsRegister = liffReady && staffLoaded && !isAdmin && !myStaffId
@@ -329,16 +330,16 @@ export default function App() {
                   const dayShifts = day ? getShiftsForDate(day) : []
                   const canAdd = day && (isAdmin || (!!myStaffId && !hasShiftOnDay(day, myStaffId)))
                   return (
-                    <div key={idx} onClick={() => day && dayShifts.length > 0 && setDayDetail(day)}
-                      style={{ background: day ? '#fff' : '#F5F3EE', minHeight: 86, padding: 5, overflow: 'hidden', minWidth: 0, cursor: day && dayShifts.length > 0 ? 'pointer' : 'default' }}>
+                    <div key={idx} onClick={() => day && setDayDetail(day)}
+                      style={{ background: day ? '#fff' : '#F5F3EE', minHeight: 80, padding: 4, overflow: 'hidden', minWidth: 0, cursor: day ? 'pointer' : 'default' }}>
                       {day && (
                         <>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
                             <span style={{
-                              fontWeight: isToday(day) ? 800 : 600, fontSize: 13,
+                              fontWeight: isToday(day) ? 800 : 600, fontSize: 12,
                               color: isToday(day) ? '#fff' : dow===0?'#FF6B6B':dow===6?'#4ECDC4':'#2D2A26',
                               background: isToday(day) ? '#2D2A26' : 'transparent',
-                              borderRadius: '50%', width: 22, height: 22,
+                              borderRadius: '50%', width: 20, height: 20,
                               display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                             }}>{day}</span>
                             {canAdd && (
@@ -349,24 +350,25 @@ export default function App() {
                                 setModal({ type: 'add', day })
                               }} style={{
                                 background: '#F7B731', border: 'none', borderRadius: '50%',
-                                width: 18, height: 18, fontSize: 13, cursor: 'pointer',
+                                width: 16, height: 16, fontSize: 12, cursor: 'pointer',
                                 color: '#2D2A26', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center',
                               }}>+</button>
                             )}
                           </div>
+                          {/* 名前のみ表示 */}
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                             {dayShifts.map(sh => {
                               const s = getStaffById(sh.staffId)
                               if (!s) return null
                               const col = STAFF_COLORS[s.colorIdx]
                               return (
-                                <div key={sh.id} style={{ background: col.light, borderLeft: `3px solid ${col.bg}`, borderRadius: '0 4px 4px 0', padding: '2px 4px', fontSize: 10, overflow: 'hidden' }}>
-                                  <span style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>
-                                    {s.name.split(' ').pop()}
-                                  </span>
-                                  <span style={{ fontWeight: 400, color: '#666', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>
-                                    {sh.start}〜{sh.end}{sh.hasBreak ? '☕' : ''}
-                                  </span>
+                                <div key={sh.id} style={{
+                                  background: col.bg, borderRadius: 4,
+                                  padding: '2px 4px', fontSize: 9, fontWeight: 700,
+                                  color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap', display: 'block',
+                                }}>
+                                  {s.name.split(' ').pop()}
                                 </div>
                               )
                             })}
@@ -429,31 +431,35 @@ export default function App() {
               </h3>
               <button onClick={() => setDayDetail(null)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#999' }}>×</button>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {getShiftsForDate(dayDetail).map(sh => {
-                const s = getStaffById(sh.staffId)
-                if (!s) return null
-                const col = STAFF_COLORS[s.colorIdx]
-                const editable = canEditShift(sh)
-                return (
-                  <div key={sh.id} style={{ background: col.light, border: `2px solid ${col.bg}`, borderRadius: 10, padding: '12px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div>
-                      <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 4 }}>{s.name}</div>
-                      <div style={{ fontSize: 13, color: '#444' }}>{sh.start}〜{sh.end}</div>
-                      <div style={{ fontSize: 12, color: '#666', marginTop: 2 }}>
-                        {sh.hasBreak ? '☕ 昼休憩あり' : '🚫 昼休憩なし'} ／ 実働 {calcHours(sh.start, sh.end, sh.hasBreak)}時間
+            {getShiftsForDate(dayDetail).length === 0 ? (
+              <p style={{ color: '#aaa', fontSize: 13, textAlign: 'center', padding: '16px 0' }}>シフトなし</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {getShiftsForDate(dayDetail).map(sh => {
+                  const s = getStaffById(sh.staffId)
+                  if (!s) return null
+                  const col = STAFF_COLORS[s.colorIdx]
+                  const editable = canEditShift(sh)
+                  return (
+                    <div key={sh.id} style={{ background: col.light, border: `2px solid ${col.bg}`, borderRadius: 10, padding: '12px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 4 }}>{s.name}</div>
+                        <div style={{ fontSize: 13, color: '#444' }}>{sh.start}〜{sh.end}</div>
+                        <div style={{ fontSize: 12, color: '#666', marginTop: 2 }}>
+                          {sh.hasBreak ? '☕ 昼休憩あり' : '🚫 昼休憩なし'} ／ 実働 {calcHours(sh.start, sh.end, sh.hasBreak)}時間
+                        </div>
                       </div>
+                      {editable && (
+                        <button onClick={() => requestDeleteShift(dayDetail, sh.id, sh.staffId)} style={{
+                          background: '#FFE5E5', border: '1.5px solid #FF6B6B', borderRadius: 8,
+                          padding: '6px 12px', cursor: 'pointer', fontSize: 12, fontWeight: 700, color: '#FF6B6B',
+                        }}>削除</button>
+                      )}
                     </div>
-                    {editable && (
-                      <button onClick={() => requestDeleteShift(dayDetail, sh.id, sh.staffId)} style={{
-                        background: '#FFE5E5', border: '1.5px solid #FF6B6B', borderRadius: 8,
-                        padding: '6px 12px', cursor: 'pointer', fontSize: 12, fontWeight: 700, color: '#FF6B6B',
-                      }}>削除</button>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
+                  )
+                })}
+              </div>
+            )}
             {(isAdmin || (!!myStaffId && !hasShiftOnDay(dayDetail, myStaffId))) && (
               <button onClick={() => {
                 setDayDetail(null)
