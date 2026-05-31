@@ -48,12 +48,12 @@ export default function App() {
   const [syncStatus, setSyncStatus] = useState('synced')
   const [lineUser, setLineUser] = useState(null)
   const [lineUserId, setLineUserId] = useState(null)
-  const [myStaffId, setMyStaffId] = useState(null) // 自分のスタッフID
-  const [selectingName, setSelectingName] = useState(false) // 名前選択画面
+  const [myStaffId, setMyStaffId] = useState(null)
+  const [selectingName, setSelectingName] = useState(false)
+  const [deleteConfirm, setDeleteConfirm] = useState(null) // { day, shiftId, staffId, name }
 
   const isAdmin = lineUserId === ADMIN_USER_ID
 
-  // LIFF初期化
   useEffect(() => {
     if (typeof liff !== 'undefined') {
       liff.init({ liffId: LIFF_ID })
@@ -62,7 +62,6 @@ export default function App() {
             liff.getProfile().then(profile => {
               setLineUser({ name: profile.displayName, picture: profile.pictureUrl })
               setLineUserId(profile.userId)
-              // ローカルに保存したスタッフIDを読み込む
               const saved = localStorage.getItem('myStaffId_' + profile.userId)
               if (saved) setMyStaffId(Number(saved))
               else if (profile.userId !== ADMIN_USER_ID) setSelectingName(true)
@@ -75,7 +74,6 @@ export default function App() {
     }
   }, [])
 
-  // Firestore リアルタイム同期
   useEffect(() => {
     const unsubStaff = onSnapshot(doc(db, 'app', 'staff'), snap => {
       if (snap.exists()) {
@@ -121,6 +119,10 @@ export default function App() {
     setSelectingName(false)
   }
 
+  function changeMyName() {
+    setSelectingName(true)
+  }
+
   function getShiftsForDate(d) { return shifts[dateKey(year, month, d)] || [] }
   function getStaffById(id) { return staff.find(s => s.id === id) }
 
@@ -129,9 +131,9 @@ export default function App() {
     return myStaffId && sh.staffId === myStaffId
   }
 
-  function canAddShiftFor(staffId) {
-    if (isAdmin) return true
-    return myStaffId && staffId === myStaffId
+  function hasShiftOnDay(day, staffId) {
+    const dayShifts = getShiftsForDate(day)
+    return dayShifts.some(sh => sh.staffId === staffId)
   }
 
   function prevMonth() {
@@ -145,11 +147,19 @@ export default function App() {
 
   async function addShift() {
     if (!shiftForm.staffId) return
-    if (!canAddShiftFor(Number(shiftForm.staffId))) return
+    const staffId = Number(shiftForm.staffId)
+    if (!isAdmin && myStaffId !== staffId) return
+
+    // 重複チェック
+    if (hasShiftOnDay(modal.day, staffId)) {
+      alert('この日はすでにシフトが入っています')
+      return
+    }
+
     const key = dateKey(year, month, modal.day)
     const newShift = {
       id: Date.now(),
-      staffId: Number(shiftForm.staffId),
+      staffId,
       start: shiftForm.start,
       end: shiftForm.end,
       hasBreak: shiftForm.hasBreak,
@@ -160,11 +170,19 @@ export default function App() {
     await saveShifts(updated)
   }
 
-  async function deleteShift(day, shiftId, staffId) {
+  function requestDeleteShift(day, shiftId, staffId) {
     if (!canEditShift({ staffId })) return
+    const s = getStaffById(staffId)
+    setDeleteConfirm({ day, shiftId, staffId, name: s?.name || '' })
+  }
+
+  async function confirmDeleteShift() {
+    if (!deleteConfirm) return
+    const { day, shiftId } = deleteConfirm
     const key = dateKey(year, month, day)
     const updated = { ...shifts, [key]: (shifts[key] || []).filter(s => s.id !== shiftId) }
     setShifts(updated)
+    setDeleteConfirm(null)
     await saveShifts(updated)
   }
 
@@ -225,21 +243,33 @@ export default function App() {
     <div style={{ minHeight: '100vh', background: '#F8F6F1', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
       <div style={{ background: '#fff', borderRadius: 16, padding: '28px 24px', width: '100%', maxWidth: 340, boxShadow: '0 4px 24px rgba(0,0,0,0.1)' }}>
         <div style={{ fontSize: 32, textAlign: 'center', marginBottom: 8 }}>👋</div>
-        <h2 style={{ textAlign: 'center', fontSize: 18, fontWeight: 800, marginBottom: 6 }}>はじめまして！</h2>
+        <h2 style={{ textAlign: 'center', fontSize: 18, fontWeight: 800, marginBottom: 6 }}>
+          {myStaffId ? '名前を変更する' : 'はじめまして！'}
+        </h2>
         <p style={{ textAlign: 'center', fontSize: 13, color: '#666', marginBottom: 20 }}>あなたの名前を選んでください</p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {staff.map(s => (
             <button key={s.id} onClick={() => selectMyName(s.id)} style={{
-              padding: '12px 16px', borderRadius: 10, border: `2px solid ${STAFF_COLORS[s.colorIdx].bg}`,
-              background: STAFF_COLORS[s.colorIdx].light, cursor: 'pointer',
-              fontSize: 15, fontWeight: 700, color: '#2D2A26',
+              padding: '12px 16px', borderRadius: 10,
+              border: `2px solid ${myStaffId === s.id ? '#2D2A26' : STAFF_COLORS[s.colorIdx].bg}`,
+              background: myStaffId === s.id ? '#2D2A26' : STAFF_COLORS[s.colorIdx].light,
+              cursor: 'pointer', fontSize: 15, fontWeight: 700,
+              color: myStaffId === s.id ? '#fff' : '#2D2A26',
               display: 'flex', alignItems: 'center', gap: 10,
             }}>
               <span style={{ width: 12, height: 12, borderRadius: '50%', background: STAFF_COLORS[s.colorIdx].bg, display: 'inline-block' }} />
               {s.name}
+              {myStaffId === s.id && <span style={{ marginLeft: 'auto', fontSize: 12 }}>✓ 現在</span>}
             </button>
           ))}
         </div>
+        {myStaffId && (
+          <button onClick={() => setSelectingName(false)} style={{
+            width: '100%', marginTop: 16, padding: '10px', borderRadius: 10,
+            border: '1.5px solid #ddd', background: '#fff', cursor: 'pointer',
+            fontSize: 13, fontWeight: 600, color: '#666',
+          }}>キャンセル</button>
+        )}
       </div>
     </div>
   )
@@ -285,6 +315,13 @@ export default function App() {
               fontWeight: 700, cursor: 'pointer', fontSize: 12,
             }}>⚙ スタッフ管理</button>
           )}
+          {!isAdmin && myStaffId && (
+            <button onClick={changeMyName} style={{
+              padding: '5px 12px', borderRadius: 20, border: 'none',
+              background: 'rgba(255,255,255,0.13)', color: '#F8F6F1',
+              fontWeight: 700, cursor: 'pointer', fontSize: 12,
+            }}>✏️ 名前変更</button>
+          )}
         </div>
       </div>
 
@@ -316,7 +353,7 @@ export default function App() {
                 {cells.map((day, idx) => {
                   const dow = idx % 7
                   const dayShifts = day ? getShiftsForDate(day) : []
-                  const canAdd = isAdmin || !!myStaffId
+                  const canAdd = day && (isAdmin || (!!myStaffId && !hasShiftOnDay(day, myStaffId)))
                   return (
                     <div key={idx} style={{ background: day ? '#fff' : '#F5F3EE', minHeight: 86, padding: 5 }}>
                       {day && (
@@ -354,7 +391,7 @@ export default function App() {
                                     <span style={{ fontWeight: 400, color: '#666' }}>{sh.start}〜{sh.end}{sh.hasBreak ? '☕' : ''}</span>
                                   </span>
                                   {editable && (
-                                    <button onClick={() => deleteShift(day, sh.id, sh.staffId)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#bbb', fontSize: 11, padding: '0 1px' }}>×</button>
+                                    <button onClick={() => requestDeleteShift(day, sh.id, sh.staffId)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#bbb', fontSize: 11, padding: '0 1px' }}>×</button>
                                   )}
                                 </div>
                               )
@@ -406,6 +443,24 @@ export default function App() {
         )}
       </div>
 
+      {/* 削除確認モーダル */}
+      {deleteConfirm && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(45,42,38,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
+          <div style={{ background: '#fff', borderRadius: 16, padding: '28px 24px', minWidth: 280, maxWidth: 360, boxShadow: '0 8px 40px rgba(0,0,0,0.18)', textAlign: 'center' }}>
+            <div style={{ fontSize: 36, marginBottom: 12 }}>🗑️</div>
+            <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 8 }}>シフトを削除しますか？</h3>
+            <p style={{ fontSize: 13, color: '#666', marginBottom: 20 }}>
+              {deleteConfirm.name} の {month+1}月{deleteConfirm.day}日のシフトを削除します。<br />この操作は元に戻せません。
+            </p>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button onClick={() => setDeleteConfirm(null)} style={{ flex: 1, padding: '10px', borderRadius: 8, border: '1.5px solid #ddd', background: '#fff', cursor: 'pointer', fontSize: 14, fontWeight: 600 }}>キャンセル</button>
+              <button onClick={confirmDeleteShift} style={{ flex: 1, padding: '10px', borderRadius: 8, border: 'none', background: '#FF6B6B', color: '#fff', cursor: 'pointer', fontSize: 14, fontWeight: 700 }}>削除する</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 各種モーダル */}
       {modal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(45,42,38,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}
           onClick={e => { if (e.target === e.currentTarget) setModal(null) }}>
@@ -418,7 +473,7 @@ export default function App() {
                     <label style={{ fontWeight: 700, fontSize: 13 }}>スタッフ
                       <select value={shiftForm.staffId} onChange={e => setShiftForm(f => ({ ...f, staffId: e.target.value }))}
                         style={{ display: 'block', width: '100%', marginTop: 3, padding: '7px 10px', borderRadius: 7, border: '1.5px solid #ddd', fontSize: 13 }}>
-                        {staff.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                        {staff.map(s => <option key={s.id} value={s.id}>{s.name}{hasShiftOnDay(modal.day, s.id) ? '（登録済み）' : ''}</option>)}
                       </select>
                     </label>
                   )}
