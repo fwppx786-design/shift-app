@@ -337,7 +337,7 @@ export default function App() {
                 backgroundSize: '60%',
                 backgroundPosition: 'center',
                 backgroundRepeat: 'no-repeat',
-                opacity: 0.08,
+                opacity: 0.15,
                 pointerEvents: 'none',
                 zIndex: 0,
               }} />
