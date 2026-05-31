@@ -5,7 +5,7 @@
 import { initializeApp } from 'firebase/app'
 import { getFirestore } from 'firebase/firestore'
 
-firebaseConfig = {
+const firebaseConfig = {
   apiKey: "AIzaSyCFTuDXbLJWB4oO5izWJaM-AluOxuWFbrQ",
   authDomain: "shift-e619d.firebaseapp.com",
   projectId: "shift-e619d",
