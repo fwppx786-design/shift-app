@@ -38,7 +38,15 @@ function calcHours(start, end, hasBreak) {
 
 async function sendLineNotify(message) {
   try {
-    await fetch('https://api.line.me/v2/bot/message/broadcast', {
+    await fetch('/api/notify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message })
+    })
+  } catch(e) {
+    console.error('LINE通知エラー:', e)
+  }
+}
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
