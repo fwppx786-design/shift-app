@@ -20,6 +20,8 @@ const TIME_SLOTS = [
   '16:00','16:30','17:00','17:30','18:00',
 ]
 
+const LOCATIONS = ['石の口', '吉井', '宿井1', '宿']
+
 const WEEKDAYS = ['日','月','火','水','木','金','土']
 
 function getDaysInMonth(y, m) { return new Date(y, m + 1, 0).getDate() }
@@ -39,6 +41,7 @@ export default function App() {
   const [year, setYear] = useState(today.getFullYear())
   const [month, setMonth] = useState(today.getMonth())
   const [shifts, setShifts] = useState({})
+  const [locations, setLocations] = useState({}) // { "2026-06-01": "石の口" }
   const [staff, setStaff] = useState([])
   const [modal, setModal] = useState(null)
   const [shiftForm, setShiftForm] = useState({ staffId: '', start: '9:00', end: '17:00', hasBreak: true })
@@ -47,7 +50,6 @@ export default function App() {
   const [syncStatus, setSyncStatus] = useState('synced')
   const [lineUser, setLineUser] = useState(null)
   const [lineUserId, setLineUserId] = useState(null)
-  const [myStaffId, setMyStaffId] = useState(null)
   const [registerName, setRegisterName] = useState('')
   const [registerError, setRegisterError] = useState('')
   const [deleteConfirm, setDeleteConfirm] = useState(null)
@@ -56,8 +58,6 @@ export default function App() {
   const [dayDetail, setDayDetail] = useState(null)
 
   const isAdmin = lineUserId === ADMIN_USER_ID
-
-  // LINE User IDからスタッフを検索
   const myStaff = staff.find(s => s.lineUserId === lineUserId)
   const needsRegister = liffReady && staffLoaded && !isAdmin && !myStaff
 
@@ -92,7 +92,12 @@ export default function App() {
       else setShifts({})
     }, err => console.error(err))
 
-    return () => { unsubStaff(); unsubShifts() }
+    const unsubLocations = onSnapshot(doc(db, 'app', 'locations'), snap => {
+      if (snap.exists()) setLocations(snap.data().data || {})
+      else setLocations({})
+    }, err => console.error(err))
+
+    return () => { unsubStaff(); unsubShifts(); unsubLocations() }
   }, [])
 
   async function saveShifts(updated) {
@@ -111,6 +116,17 @@ export default function App() {
     } catch { setSyncStatus('error') }
   }
 
+  async function saveLocation(day, location) {
+    const key = dateKey(year, month, day)
+    const updated = { ...locations, [key]: location }
+    setLocations(updated)
+    setSyncStatus('saving')
+    try {
+      await setDoc(doc(db, 'app', 'locations'), { data: updated })
+      setSyncStatus('synced')
+    } catch { setSyncStatus('error') }
+  }
+
   async function registerStaff() {
     const name = registerName.trim()
     if (!name) { setRegisterError('名前を入力してください'); return }
@@ -125,6 +141,7 @@ export default function App() {
   }
 
   function getShiftsForDate(d) { return shifts[dateKey(year, month, d)] || [] }
+  function getLocationForDate(d) { return locations[dateKey(year, month, d)] || '' }
   function getStaffById(id) { return staff.find(s => s.id === id) }
 
   function canEditShift(sh) {
@@ -219,7 +236,6 @@ export default function App() {
     error:  { bg: '#FF6B6B', label: '⚠ エラー' },
   }[syncStatus]
 
-  // 名前登録画面
   if (needsRegister) return (
     <div style={{ minHeight: '100vh', background: '#F8F6F1', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
       <div style={{ background: '#fff', borderRadius: 16, padding: '32px 24px', width: '100%', maxWidth: 340, boxShadow: '0 4px 24px rgba(0,0,0,0.1)' }}>
@@ -307,65 +323,95 @@ export default function App() {
                 </div>
               ))}
             </div>
-            <div style={{ background: '#fff', borderRadius: 14, overflow: 'hidden', boxShadow: '0 2px 18px rgba(0,0,0,0.08)' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)' }}>
-                {WEEKDAYS.map((d, i) => (
-                  <div key={d} style={{ textAlign: 'center', padding: '9px 0', fontWeight: 700, fontSize: 12, background: '#2D2A26', color: i===0?'#FF6B6B':i===6?'#4ECDC4':'#F8F6F1', letterSpacing: 1 }}>{d}</div>
-                ))}
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 1, background: '#E8E4DC' }}>
-                {cells.map((day, idx) => {
-                  const dow = idx % 7
-                  const dayShifts = day ? getShiftsForDate(day) : []
-                  const canAdd = day && (isAdmin || (!!myStaff && !hasShiftOnDay(day, myStaff.id)))
-                  return (
-                    <div key={idx} onClick={() => day && setDayDetail(day)}
-                      style={{ background: day ? '#fff' : '#F5F3EE', minHeight: 80, padding: 4, overflow: 'hidden', minWidth: 0, cursor: day ? 'pointer' : 'default' }}>
-                      {day && (
-                        <>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
-                            <span style={{
-                              fontWeight: isToday(day) ? 800 : 600, fontSize: 12,
-                              color: isToday(day) ? '#fff' : dow===0?'#FF6B6B':dow===6?'#4ECDC4':'#2D2A26',
-                              background: isToday(day) ? '#2D2A26' : 'transparent',
-                              borderRadius: '50%', width: 20, height: 20,
-                              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                            }}>{day}</span>
-                            {canAdd && (
-                              <button onClick={e => {
-                                e.stopPropagation()
-                                const defaultStaffId = isAdmin ? (staff[0]?.id || '') : myStaff?.id
-                                setShiftForm({ staffId: defaultStaffId, start: '9:00', end: '17:00', hasBreak: true })
-                                setModal({ type: 'add', day })
-                              }} style={{
-                                background: '#F7B731', border: 'none', borderRadius: '50%',
-                                width: 16, height: 16, fontSize: 12, cursor: 'pointer',
-                                color: '#2D2A26', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                              }}>+</button>
+
+            {/* カレンダー（背景画像付き） */}
+            <div style={{
+              background: '#fff', borderRadius: 14, overflow: 'hidden',
+              boxShadow: '0 2px 18px rgba(0,0,0,0.08)',
+              position: 'relative',
+            }}>
+              {/* 背景画像 */}
+              <div style={{
+                position: 'absolute', inset: 0,
+                backgroundImage: 'url(/kusa.png)',
+                backgroundSize: '60%',
+                backgroundPosition: 'center',
+                backgroundRepeat: 'no-repeat',
+                opacity: 0.08,
+                pointerEvents: 'none',
+                zIndex: 0,
+              }} />
+
+              <div style={{ position: 'relative', zIndex: 1 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)' }}>
+                  {WEEKDAYS.map((d, i) => (
+                    <div key={d} style={{ textAlign: 'center', padding: '9px 0', fontWeight: 700, fontSize: 12, background: '#2D2A26', color: i===0?'#FF6B6B':i===6?'#4ECDC4':'#F8F6F1', letterSpacing: 1 }}>{d}</div>
+                  ))}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 1, background: '#E8E4DC' }}>
+                  {cells.map((day, idx) => {
+                    const dow = idx % 7
+                    const dayShifts = day ? getShiftsForDate(day) : []
+                    const location = day ? getLocationForDate(day) : ''
+                    const canAdd = day && (isAdmin || (!!myStaff && !hasShiftOnDay(day, myStaff.id)))
+                    return (
+                      <div key={idx} onClick={() => day && setDayDetail(day)}
+                        style={{ background: day ? 'rgba(255,255,255,0.85)' : 'rgba(245,243,238,0.85)', minHeight: 80, padding: 4, overflow: 'hidden', minWidth: 0, cursor: day ? 'pointer' : 'default' }}>
+                        {day && (
+                          <>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+                              <span style={{
+                                fontWeight: isToday(day) ? 800 : 600, fontSize: 12,
+                                color: isToday(day) ? '#fff' : dow===0?'#FF6B6B':dow===6?'#4ECDC4':'#2D2A26',
+                                background: isToday(day) ? '#2D2A26' : 'transparent',
+                                borderRadius: '50%', width: 20, height: 20,
+                                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                              }}>{day}</span>
+                              {canAdd && (
+                                <button onClick={e => {
+                                  e.stopPropagation()
+                                  const defaultStaffId = isAdmin ? (staff[0]?.id || '') : myStaff?.id
+                                  setShiftForm({ staffId: defaultStaffId, start: '9:00', end: '17:00', hasBreak: true })
+                                  setModal({ type: 'add', day })
+                                }} style={{
+                                  background: '#F7B731', border: 'none', borderRadius: '50%',
+                                  width: 16, height: 16, fontSize: 12, cursor: 'pointer',
+                                  color: '#2D2A26', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                }}>+</button>
+                              )}
+                            </div>
+                            {/* 場所バッジ */}
+                            {location && (
+                              <div style={{
+                                background: '#4CAF50', color: '#fff', borderRadius: 3,
+                                padding: '1px 3px', fontSize: 8, fontWeight: 700,
+                                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                                marginBottom: 2,
+                              }}>📍{location}</div>
                             )}
-                          </div>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                            {dayShifts.map(sh => {
-                              const s = getStaffById(sh.staffId)
-                              if (!s) return null
-                              const col = STAFF_COLORS[s.colorIdx]
-                              return (
-                                <div key={sh.id} style={{
-                                  background: col.bg, borderRadius: 4,
-                                  padding: '2px 4px', fontSize: 9, fontWeight: 700,
-                                  color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis',
-                                  whiteSpace: 'nowrap', display: 'block',
-                                }}>
-                                  {s.name.split(' ').pop()}
-                                </div>
-                              )
-                            })}
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  )
-                })}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                              {dayShifts.map(sh => {
+                                const s = getStaffById(sh.staffId)
+                                if (!s) return null
+                                const col = STAFF_COLORS[s.colorIdx]
+                                return (
+                                  <div key={sh.id} style={{
+                                    background: col.bg, borderRadius: 4,
+                                    padding: '2px 4px', fontSize: 9, fontWeight: 700,
+                                    color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap', display: 'block',
+                                  }}>
+                                    {s.name.split(' ').pop()}
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
               </div>
             </div>
           </>
@@ -419,6 +465,26 @@ export default function App() {
               </h3>
               <button onClick={() => setDayDetail(null)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#999' }}>×</button>
             </div>
+
+            {/* 草刈り場所 */}
+            <div style={{ background: '#F0FFF0', border: '1.5px solid #4CAF50', borderRadius: 10, padding: '12px 14px', marginBottom: 14 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#4CAF50', marginBottom: 6 }}>📍 草刈り場所</div>
+              {isAdmin ? (
+                <select
+                  value={getLocationForDate(dayDetail)}
+                  onChange={e => saveLocation(dayDetail, e.target.value)}
+                  style={{ width: '100%', padding: '8px 10px', borderRadius: 7, border: '1.5px solid #4CAF50', fontSize: 14, background: '#fff' }}
+                >
+                  <option value=''>未設定</option>
+                  {LOCATIONS.map(l => <option key={l} value={l}>{l}</option>)}
+                </select>
+              ) : (
+                <div style={{ fontSize: 15, fontWeight: 700, color: '#2D2A26' }}>
+                  {getLocationForDate(dayDetail) || '未設定'}
+                </div>
+              )}
+            </div>
+
             {getShiftsForDate(dayDetail).length === 0 ? (
               <p style={{ color: '#aaa', fontSize: 13, textAlign: 'center', padding: '16px 0' }}>シフトなし</p>
             ) : (
