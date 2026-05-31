@@ -331,12 +331,11 @@ export default function App() {
               position: 'relative',
             }}>
               {/* 背景画像 */}
-             <div style={{
-  position: 'absolute', inset: 0,
-  backgroundImage: 'url(/kusa.png)',
-  backgroundSize: '60%',
-  backgroundPosition: 'center',
-  backgroundRepeat: 'no-repeat',
+            <img src='/kusa.png' style={{
+  position: 'absolute',
+  top: '50%', left: '50%',
+  transform: 'translate(-50%, -50%)',
+  width: '70%',
   opacity: 0.15,
   pointerEvents: 'none',
   zIndex: 0,
