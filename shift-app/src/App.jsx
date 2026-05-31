@@ -348,7 +348,11 @@ export default function App() {
                     <div key={d} style={{ textAlign: 'center', padding: '9px 0', fontWeight: 700, fontSize: 12, background: '#2D2A26', color: i===0?'#FF6B6B':i===6?'#4ECDC4':'#F8F6F1', letterSpacing: 1 }}>{d}</div>
                   ))}
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 1, background: '#E8E4DC' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 1, background: '#E8E4DC',
+backgroundImage: 'url(/kusa.png)',
+backgroundSize: '60%',
+backgroundPosition: 'center',
+backgroundRepeat: 'no-repeat', }}>
                   {cells.map((day, idx) => {
                     const dow = idx % 7
                     const dayShifts = day ? getShiftsForDate(day) : []
