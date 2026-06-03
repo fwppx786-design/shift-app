@@ -378,16 +378,17 @@ export default function App() {
 
         {view === 'month' && (
           <>
-            {/* スタッフ凡例：管理者は全員、一般は自分のみ */}
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>
-              {(isAdmin ? staff : (myStaff ? [myStaff] : [])).map(s => (
-                <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 5, background: '#fff', border: `2px solid ${STAFF_COLORS[s.colorIdx].bg}`, borderRadius: 20, padding: '3px 10px', fontSize: 12, fontWeight: 600 }}>
-                  <span style={{ width: 9, height: 9, borderRadius: '50%', background: STAFF_COLORS[s.colorIdx].bg, display: 'inline-block' }} />
-                  {s.name}
-                  {myStaff?.id === s.id && !isAdmin && <span style={{ fontSize: 10, color: '#888' }}>（自分）</span>}
-                </div>
-              ))}
-            </div>
+            {/* スタッフ凡例：管理者のみ表示 */}
+            {isAdmin && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>
+                {staff.map(s => (
+                  <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 5, background: '#fff', border: `2px solid ${STAFF_COLORS[s.colorIdx].bg}`, borderRadius: 20, padding: '3px 10px', fontSize: 12, fontWeight: 600 }}>
+                    <span style={{ width: 9, height: 9, borderRadius: '50%', background: STAFF_COLORS[s.colorIdx].bg, display: 'inline-block' }} />
+                    {s.name}
+                  </div>
+                ))}
+              </div>
+            )}
 
             {/* カレンダー */}
             <div style={{ borderRadius: 14, overflow: 'hidden', boxShadow: '0 2px 18px rgba(0,0,0,0.08)', position: 'relative' }}>
