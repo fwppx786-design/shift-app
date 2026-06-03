@@ -4,6 +4,7 @@ import { doc, setDoc, onSnapshot } from 'firebase/firestore'
 
 const LIFF_ID = '2010241032-ZZnZ4cSu'
 const ADMIN_USER_ID = 'U929c1383c51e8e5b0e2f2d7965d414db'
+const HOURLY_RATE = 1500
 
 const STAFF_COLORS = [
   { bg: '#FF6B6B', light: '#FFE5E5' },
@@ -34,6 +35,9 @@ function calcHours(start, end, hasBreak) {
   const [h2,m2] = end.split(':').map(Number)
   const hours = (h2*60+m2-h1*60-m1)/60
   return hasBreak ? Math.max(0, hours - 1) : hours
+}
+function formatPay(hours) {
+  return `¥${(hours * HOURLY_RATE).toLocaleString()}`
 }
 
 export default function App() {
@@ -140,7 +144,15 @@ export default function App() {
     setRegisterError('')
   }
 
+  // 表示するシフトをフィルタリング（管理者は全員、一般ユーザーは自分のみ）
+  function filterShiftsForDisplay(shiftList) {
+    if (isAdmin) return shiftList
+    if (!myStaff) return []
+    return shiftList.filter(sh => sh.staffId === myStaff.id)
+  }
+
   function getShiftsForDate(d) { return shifts[dateKey(year, month, d)] || [] }
+  function getVisibleShiftsForDate(d) { return filterShiftsForDisplay(getShiftsForDate(d)) }
   function getLocationForDate(d) { return locations[dateKey(year, month, d)] || '' }
   function getStaffById(id) { return staff.find(s => s.id === id) }
   function canEditShift(sh) {
@@ -210,15 +222,29 @@ export default function App() {
 
   function getStaffMonthShifts() {
     const summary = {}
-    staff.forEach(s => { summary[s.id] = [] })
+    // 管理者は全スタッフ、一般ユーザーは自分のみ
+    const targetStaff = isAdmin ? staff : (myStaff ? [myStaff] : [])
+    targetStaff.forEach(s => { summary[s.id] = [] })
     for (let d = 1; d <= daysInMonth; d++) {
       getShiftsForDate(d).forEach(sh => {
-        if (summary[sh.staffId]) summary[sh.staffId].push({ day: d, ...sh })
+        if (summary[sh.staffId] !== undefined) {
+          summary[sh.staffId].push({ day: d, ...sh })
+        }
       })
     }
     return summary
   }
   const staffSummary = getStaffMonthShifts()
+
+  // 自分の月合計（カレンダービュー上部に表示）
+  function getMyMonthTotals() {
+    if (!myStaff && !isAdmin) return null
+    if (isAdmin) return null // 管理者はスタッフ別ビューで見る
+    const myShifts = staffSummary[myStaff?.id] || []
+    const totalHours = myShifts.reduce((acc, sh) => acc + calcHours(sh.start, sh.end, sh.hasBreak), 0)
+    return { days: myShifts.length, hours: totalHours, pay: totalHours * HOURLY_RATE }
+  }
+  const myMonthTotals = getMyMonthTotals()
 
   const cells = []
   for (let i = 0; i < firstDay; i++) cells.push(null)
@@ -271,6 +297,7 @@ export default function App() {
 
   return (
     <div style={{ minHeight: '100vh', background: '#F8F6F1', color: '#2D2A26' }}>
+      {/* ヘッダー */}
       <div style={{ background: '#2D2A26', color: '#F8F6F1', padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 2px 12px rgba(0,0,0,0.18)', flexWrap: 'wrap', gap: 8 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <span style={{ fontSize: 20, fontWeight: 800, letterSpacing: 2 }}>🌿 Let's 草刈り</span>
@@ -291,7 +318,7 @@ export default function App() {
               color: view === v ? '#2D2A26' : '#F8F6F1',
               fontWeight: 700, cursor: 'pointer', fontSize: 12,
             }}>
-              {v === 'month' ? 'カレンダー' : 'スタッフ別'}
+              {v === 'month' ? 'カレンダー' : isAdmin ? 'スタッフ別' : '自分のシフト'}
             </button>
           ))}
           {isAdmin && (
@@ -305,16 +332,55 @@ export default function App() {
       </div>
 
       <div style={{ maxWidth: 920, margin: '0 auto', padding: '20px 14px' }}>
+        {/* 月ナビゲーション */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, marginBottom: 20 }}>
           <button onClick={prevMonth} style={{ background: '#2D2A26', color: '#F8F6F1', border: 'none', borderRadius: '50%', width: 34, height: 34, fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>‹</button>
           <span style={{ fontSize: 20, fontWeight: 800, letterSpacing: 2 }}>{year}年 {month+1}月</span>
           <button onClick={nextMonth} style={{ background: '#2D2A26', color: '#F8F6F1', border: 'none', borderRadius: '50%', width: 34, height: 34, fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>›</button>
         </div>
 
+        {/* 自分の月次サマリーカード（一般ユーザーのみ、カレンダービュー） */}
+        {!isAdmin && myStaff && myMonthTotals && view === 'month' && (
+          <div style={{
+            background: '#fff',
+            border: `2px solid ${STAFF_COLORS[myStaff.colorIdx].bg}`,
+            borderRadius: 14,
+            padding: '14px 18px',
+            marginBottom: 16,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: 10,
+            boxShadow: '0 2px 12px rgba(0,0,0,0.06)',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ width: 10, height: 10, borderRadius: '50%', background: STAFF_COLORS[myStaff.colorIdx].bg, display: 'inline-block' }} />
+              <span style={{ fontWeight: 800, fontSize: 14 }}>{myStaff.name}</span>
+              <span style={{ fontSize: 12, color: '#888' }}>今月の実績</span>
+            </div>
+            <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap' }}>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: 11, color: '#888', fontWeight: 600 }}>出勤日数</div>
+                <div style={{ fontSize: 18, fontWeight: 800, color: '#2D2A26' }}>{myMonthTotals.days}<span style={{ fontSize: 11, fontWeight: 600 }}>日</span></div>
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: 11, color: '#888', fontWeight: 600 }}>実働時間</div>
+                <div style={{ fontSize: 18, fontWeight: 800, color: '#2D2A26' }}>{myMonthTotals.hours}<span style={{ fontSize: 11, fontWeight: 600 }}>時間</span></div>
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: 11, color: '#888', fontWeight: 600 }}>報酬合計</div>
+                <div style={{ fontSize: 18, fontWeight: 800, color: '#4CAF50' }}>{formatPay(myMonthTotals.hours)}</div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {view === 'month' && (
           <>
+            {/* スタッフ凡例：管理者は全員、一般は自分のみ */}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>
-              {staff.map(s => (
+              {(isAdmin ? staff : (myStaff ? [myStaff] : [])).map(s => (
                 <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 5, background: '#fff', border: `2px solid ${STAFF_COLORS[s.colorIdx].bg}`, borderRadius: 20, padding: '3px 10px', fontSize: 12, fontWeight: 600 }}>
                   <span style={{ width: 9, height: 9, borderRadius: '50%', background: STAFF_COLORS[s.colorIdx].bg, display: 'inline-block' }} />
                   {s.name}
@@ -325,31 +391,19 @@ export default function App() {
 
             {/* カレンダー */}
             <div style={{ borderRadius: 14, overflow: 'hidden', boxShadow: '0 2px 18px rgba(0,0,0,0.08)', position: 'relative' }}>
-              {/* 背景画像 */}
               <img
                 src='/kusa.png'
-                style={{
-                  position: 'absolute',
-                  top: 36, left: 0,
-                  width: '100%',
-                  height: 'calc(100% - 36px)',
-                  objectFit: 'cover',
-                  opacity: 0.12,
-                  pointerEvents: 'none',
-                  zIndex: 1,
-                }}
+                style={{ position: 'absolute', top: 36, left: 0, width: '100%', height: 'calc(100% - 36px)', objectFit: 'cover', opacity: 0.12, pointerEvents: 'none', zIndex: 1 }}
               />
-              {/* 曜日ヘッダー */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', position: 'relative', zIndex: 2 }}>
                 {WEEKDAYS.map((d, i) => (
                   <div key={d} style={{ textAlign: 'center', padding: '9px 0', fontWeight: 700, fontSize: 12, background: '#2D2A26', color: i===0?'#FF6B6B':i===6?'#4ECDC4':'#F8F6F1', letterSpacing: 1 }}>{d}</div>
                 ))}
               </div>
-              {/* 日付グリッド */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 1, background: '#E8E4DC', position: 'relative', zIndex: 2 }}>
                 {cells.map((day, idx) => {
                   const dow = idx % 7
-                  const dayShifts = day ? getShiftsForDate(day) : []
+                  const visibleShifts = day ? getVisibleShiftsForDate(day) : []
                   const location = day ? getLocationForDate(day) : ''
                   const canAdd = day && (isAdmin || (!!myStaff && !hasShiftOnDay(day, myStaff.id)))
                   return (
@@ -378,7 +432,8 @@ export default function App() {
                               }}>+</button>
                             )}
                           </div>
-                          {location && (
+                          {/* 場所は管理者のみ表示 */}
+                          {isAdmin && location && (
                             <div style={{
                               background: '#4CAF50', color: '#fff', borderRadius: 3,
                               padding: '1px 3px', fontSize: 8, fontWeight: 700,
@@ -387,7 +442,7 @@ export default function App() {
                             }}>📍{location}</div>
                           )}
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                            {dayShifts.map(sh => {
+                            {visibleShifts.map(sh => {
                               const s = getStaffById(sh.staffId)
                               if (!s) return null
                               const col = STAFF_COLORS[s.colorIdx]
@@ -396,9 +451,9 @@ export default function App() {
                                   background: col.bg, borderRadius: 4,
                                   padding: '2px 4px', fontSize: 9, fontWeight: 700,
                                   color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis',
-                                  whiteSpace: 'nowrap', display: 'block',
+                                  whiteSpace: 'nowrap',
                                 }}>
-                                  {s.name.split(' ').pop()}
+                                  {isAdmin ? s.name.split(' ').pop() : '✓'}
                                 </div>
                               )
                             })}
@@ -415,33 +470,67 @@ export default function App() {
 
         {view === 'staff' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            {staff.map(s => {
+            {/* 管理者：全スタッフ表示。一般ユーザー：自分のみ */}
+            {(isAdmin ? staff : (myStaff ? [myStaff] : [])).map(s => {
               const col = STAFF_COLORS[s.colorIdx]
               const myShifts = staffSummary[s.id] || []
               const totalHours = myShifts.reduce((acc, sh) => acc + calcHours(sh.start, sh.end, sh.hasBreak), 0)
+              const totalPay = totalHours * HOURLY_RATE
               return (
                 <div key={s.id} style={{ background: '#fff', borderRadius: 12, overflow: 'hidden', boxShadow: '0 2px 12px rgba(0,0,0,0.07)' }}>
-                  <div style={{ background: col.bg, color: '#fff', padding: '10px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontWeight: 800, fontSize: 15 }}>{s.name}</span>
-                    <span style={{ fontSize: 12, fontWeight: 600 }}>{myShifts.length}日出勤 / {totalHours}時間</span>
+                  <div style={{ background: col.bg, color: '#fff', padding: '10px 18px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+                      <span style={{ fontWeight: 800, fontSize: 15 }}>{s.name}</span>
+                      <div style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: 12, fontWeight: 600 }}>{myShifts.length}日 / {totalHours}時間</span>
+                        {/* 報酬合計バッジ */}
+                        <span style={{
+                          background: 'rgba(255,255,255,0.25)',
+                          borderRadius: 20,
+                          padding: '3px 12px',
+                          fontSize: 13,
+                          fontWeight: 800,
+                          letterSpacing: 0.5,
+                        }}>
+                          💴 {formatPay(totalHours)}
+                        </span>
+                      </div>
+                    </div>
                   </div>
                   <div style={{ padding: '10px 18px' }}>
                     {myShifts.length === 0 ? (
                       <span style={{ color: '#aaa', fontSize: 12 }}>シフトなし</span>
                     ) : (
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                        {myShifts.sort((a,b) => a.day - b.day).map(sh => (
-                          <div key={sh.id} style={{ background: col.light, border: `1.5px solid ${col.bg}`, borderRadius: 7, padding: '5px 10px', fontSize: 12, fontWeight: 600 }}>
-                            {month+1}/{sh.day}（{WEEKDAYS[new Date(year,month,sh.day).getDay()]}）<br />
-                            <span style={{ fontWeight: 400, fontSize: 11, color: '#555' }}>
-                              {sh.start}〜{sh.end} {sh.hasBreak ? '☕休憩あり' : '休憩なし'}<br />
-                              実働 {calcHours(sh.start, sh.end, sh.hasBreak)}時間
-                            </span>
-                          </div>
-                        ))}
+                        {myShifts.sort((a,b) => a.day - b.day).map(sh => {
+                          const hours = calcHours(sh.start, sh.end, sh.hasBreak)
+                          return (
+                            <div key={sh.id} style={{ background: col.light, border: `1.5px solid ${col.bg}`, borderRadius: 7, padding: '5px 10px', fontSize: 12, fontWeight: 600 }}>
+                              {month+1}/{sh.day}（{WEEKDAYS[new Date(year,month,sh.day).getDay()]}）<br />
+                              <span style={{ fontWeight: 400, fontSize: 11, color: '#555' }}>
+                                {sh.start}〜{sh.end} {sh.hasBreak ? '☕休憩あり' : '休憩なし'}<br />
+                                実働 {hours}時間 / {formatPay(hours)}
+                              </span>
+                            </div>
+                          )
+                        })}
                       </div>
                     )}
                   </div>
+                  {/* 月合計フッター */}
+                  {myShifts.length > 0 && (
+                    <div style={{
+                      borderTop: `1.5px solid ${col.light}`,
+                      padding: '10px 18px',
+                      display: 'flex',
+                      justifyContent: 'flex-end',
+                      gap: 20,
+                      background: col.light,
+                    }}>
+                      <span style={{ fontSize: 12, color: '#555' }}>合計：<strong>{totalHours}時間</strong></span>
+                      <span style={{ fontSize: 13, fontWeight: 800, color: '#2D2A26' }}>今月の報酬：<span style={{ color: '#4CAF50' }}>{formatPay(totalHours)}</span></span>
+                    </div>
+                  )}
                 </div>
               )
             })}
@@ -461,9 +550,10 @@ export default function App() {
               </h3>
               <button onClick={() => setDayDetail(null)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#999' }}>×</button>
             </div>
-            <div style={{ background: '#F0FFF0', border: '1.5px solid #4CAF50', borderRadius: 10, padding: '12px 14px', marginBottom: 14 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: '#4CAF50', marginBottom: 6 }}>📍 草刈り場所</div>
-              {isAdmin ? (
+            {/* 場所：管理者のみ編集・表示 */}
+            {isAdmin && (
+              <div style={{ background: '#F0FFF0', border: '1.5px solid #4CAF50', borderRadius: 10, padding: '12px 14px', marginBottom: 14 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#4CAF50', marginBottom: 6 }}>📍 草刈り場所</div>
                 <select
                   value={getLocationForDate(dayDetail)}
                   onChange={e => saveLocation(dayDetail, e.target.value)}
@@ -472,36 +562,42 @@ export default function App() {
                   <option value=''>未設定</option>
                   {LOCATIONS.map(l => <option key={l} value={l}>{l}</option>)}
                 </select>
-              ) : (
-                <div style={{ fontSize: 15, fontWeight: 700, color: '#2D2A26' }}>
-                  {getLocationForDate(dayDetail) || '未設定'}
-                </div>
-              )}
-            </div>
-            {getShiftsForDate(dayDetail).length === 0 ? (
-              <p style={{ color: '#aaa', fontSize: 13, textAlign: 'center', padding: '16px 0' }}>シフトなし</p>
+              </div>
+            )}
+
+            {/* シフト一覧：自分のシフトのみ or 管理者は全員 */}
+            {filterShiftsForDisplay(getShiftsForDate(dayDetail)).length === 0 ? (
+              <p style={{ color: '#aaa', fontSize: 13, textAlign: 'center', padding: '16px 0' }}>
+                {isAdmin ? 'シフトなし' : 'この日のシフトはありません'}
+              </p>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {getShiftsForDate(dayDetail).map(sh => {
+                {filterShiftsForDisplay(getShiftsForDate(dayDetail)).map(sh => {
                   const s = getStaffById(sh.staffId)
                   if (!s) return null
                   const col = STAFF_COLORS[s.colorIdx]
+                  const hours = calcHours(sh.start, sh.end, sh.hasBreak)
                   const editable = canEditShift(sh)
                   return (
-                    <div key={sh.id} style={{ background: col.light, border: `2px solid ${col.bg}`, borderRadius: 10, padding: '12px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div>
-                        <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 4 }}>{s.name}</div>
-                        <div style={{ fontSize: 13, color: '#444' }}>{sh.start}〜{sh.end}</div>
-                        <div style={{ fontSize: 12, color: '#666', marginTop: 2 }}>
-                          {sh.hasBreak ? '☕ 昼休憩あり' : '🚫 昼休憩なし'} ／ 実働 {calcHours(sh.start, sh.end, sh.hasBreak)}時間
+                    <div key={sh.id} style={{ background: col.light, border: `2px solid ${col.bg}`, borderRadius: 10, padding: '12px 14px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <div>
+                          {isAdmin && <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 4 }}>{s.name}</div>}
+                          <div style={{ fontSize: 13, color: '#444' }}>{sh.start}〜{sh.end}</div>
+                          <div style={{ fontSize: 12, color: '#666', marginTop: 2 }}>
+                            {sh.hasBreak ? '☕ 昼休憩あり' : '🚫 昼休憩なし'} ／ 実働 {hours}時間
+                          </div>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: '#4CAF50', marginTop: 4 }}>
+                            💴 {formatPay(hours)}
+                          </div>
                         </div>
+                        {editable && (
+                          <button onClick={() => requestDeleteShift(dayDetail, sh.id, sh.staffId)} style={{
+                            background: '#FFE5E5', border: '1.5px solid #FF6B6B', borderRadius: 8,
+                            padding: '6px 12px', cursor: 'pointer', fontSize: 12, fontWeight: 700, color: '#FF6B6B',
+                          }}>削除</button>
+                        )}
                       </div>
-                      {editable && (
-                        <button onClick={() => requestDeleteShift(dayDetail, sh.id, sh.staffId)} style={{
-                          background: '#FFE5E5', border: '1.5px solid #FF6B6B', borderRadius: 8,
-                          padding: '6px 12px', cursor: 'pointer', fontSize: 12, fontWeight: 700, color: '#FF6B6B',
-                        }}>削除</button>
-                      )}
                     </div>
                   )
                 })}
@@ -588,6 +684,7 @@ export default function App() {
                   </label>
                   <div style={{ background: '#F8F6F1', borderRadius: 8, padding: '8px 12px', fontSize: 12, color: '#666', textAlign: 'center' }}>
                     実働時間：<strong style={{ color: '#2D2A26', fontSize: 14 }}>{calcHours(shiftForm.start, shiftForm.end, shiftForm.hasBreak)}時間</strong>
+                    　報酬：<strong style={{ color: '#4CAF50', fontSize: 14 }}>{formatPay(calcHours(shiftForm.start, shiftForm.end, shiftForm.hasBreak))}</strong>
                   </div>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 20 }}>
