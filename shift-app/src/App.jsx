@@ -143,7 +143,6 @@ export default function App() {
     setRegisterError('')
   }
 
-  // 表示するシフトをフィルタリング（管理者は全員、一般ユーザーは自分のみ）
   function filterShiftsForDisplay(shiftList) {
     if (isAdmin) return shiftList
     if (!myStaff) return []
@@ -221,7 +220,6 @@ export default function App() {
 
   function getStaffMonthShifts() {
     const summary = {}
-    // 管理者は全スタッフ、一般ユーザーは自分のみ
     const targetStaff = isAdmin ? staff : (myStaff ? [myStaff] : [])
     targetStaff.forEach(s => { summary[s.id] = [] })
     for (let d = 1; d <= daysInMonth; d++) {
@@ -235,10 +233,9 @@ export default function App() {
   }
   const staffSummary = getStaffMonthShifts()
 
-  // 自分の月合計（カレンダービュー上部に表示）
   function getMyMonthTotals() {
     if (!myStaff && !isAdmin) return null
-    if (isAdmin) return null // 管理者はスタッフ別ビューで見る
+    if (isAdmin) return null
     const myShifts = staffSummary[myStaff?.id] || []
     const totalHours = myShifts.reduce((acc, sh) => acc + calcHours(sh.start, sh.end, sh.hasBreak), 0)
     return { days: myShifts.length, hours: totalHours, pay: totalHours * HOURLY_RATE }
@@ -299,11 +296,12 @@ export default function App() {
       {/* ヘッダー */}
       <div style={{ background: '#2D2A26', color: '#F8F6F1', padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 2px 12px rgba(0,0,0,0.18)', flexWrap: 'wrap', gap: 8 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          // ヘッダー部分を修正
-<div style={{ background: '#2D2A26', color: '#F8F6F1', padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 2px 12px rgba(0,0,0,0.18)', flexWrap: 'wrap', gap: 8 }}>
-  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-    <img src='/kusa2.PNG' style={{ height: 40, width: 40, borderRadius: '50%', objectFit: 'cover', border: '2px solid #F7B731' }} />  // ← これを追加
-    <img src='/kusa2.png' style={{ height: 40, width: 40, borderRadius: '50%', objectFit: 'cover', border: '2px solid #F7B731' }} />    <span style={{ fontSize: 20, fontWeight: 800, letterSpacing: 2 }}>🌿 草刈りマネタイズ💰</span>          <span style={{ fontSize: 20, fontWeight: 800, letterSpacing: 2 }}>🌿 草刈りマネタイズ💰</span>
+          <img
+            src='/kusa2.png'
+            alt='logo'
+            style={{ height: 44, width: 44, borderRadius: '50%', objectFit: 'cover', border: '2px solid #F7B731', flexShrink: 0 }}
+          />
+          <span style={{ fontSize: 20, fontWeight: 800, letterSpacing: 2 }}>🌿 草刈りマネタイズ💰</span>
           {isAdmin && <span style={{ background: '#F7B731', color: '#2D2A26', borderRadius: 20, padding: '2px 10px', fontSize: 11, fontWeight: 700 }}>管理者</span>}
           <span style={{ background: syncBadge.bg, color: '#2D2A26', borderRadius: 20, padding: '3px 10px', fontSize: 11, fontWeight: 700 }}>{syncBadge.label}</span>
         </div>
@@ -436,7 +434,6 @@ export default function App() {
                               }}>+</button>
                             )}
                           </div>
-                          {/* イベント：全ユーザーに表示 */}
                           {location && (
                             <div style={{
                               background: '#7C3AED', color: '#fff', borderRadius: 3,
@@ -474,7 +471,6 @@ export default function App() {
 
         {view === 'staff' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            {/* 管理者：全スタッフ表示。一般ユーザー：自分のみ */}
             {(isAdmin ? staff : (myStaff ? [myStaff] : [])).map(s => {
               const col = STAFF_COLORS[s.colorIdx]
               const myShifts = staffSummary[s.id] || []
@@ -487,7 +483,6 @@ export default function App() {
                       <span style={{ fontWeight: 800, fontSize: 15 }}>{s.name}</span>
                       <div style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap' }}>
                         <span style={{ fontSize: 12, fontWeight: 600 }}>{myShifts.length}日 / {totalHours}時間</span>
-                        {/* 報酬合計バッジ */}
                         <span style={{
                           background: 'rgba(255,255,255,0.25)',
                           borderRadius: 20,
@@ -521,7 +516,6 @@ export default function App() {
                       </div>
                     )}
                   </div>
-                  {/* 月合計フッター */}
                   {myShifts.length > 0 && (
                     <div style={{
                       borderTop: `1.5px solid ${col.light}`,
@@ -554,7 +548,6 @@ export default function App() {
               </h3>
               <button onClick={() => setDayDetail(null)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#999' }}>×</button>
             </div>
-            {/* イベント：管理者は編集、一般ユーザーは閲覧のみ */}
             {(isAdmin || getLocationForDate(dayDetail)) && (
               <div style={{ background: '#F5F0FF', border: '1.5px solid #7C3AED', borderRadius: 10, padding: '12px 14px', marginBottom: 14 }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: '#7C3AED', marginBottom: 6 }}>📌 イベント</div>
@@ -574,7 +567,6 @@ export default function App() {
               </div>
             )}
 
-            {/* シフト一覧：自分のシフトのみ or 管理者は全員 */}
             {filterShiftsForDisplay(getShiftsForDate(dayDetail)).length === 0 ? (
               <p style={{ color: '#aaa', fontSize: 13, textAlign: 'center', padding: '16px 0' }}>
                 {isAdmin ? 'シフトなし' : 'この日のシフトはありません'}
