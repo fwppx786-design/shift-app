@@ -300,7 +300,7 @@ export default function App() {
       {/* ヘッダー */}
       <div style={{ background: '#2D2A26', color: '#F8F6F1', padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 2px 12px rgba(0,0,0,0.18)', flexWrap: 'wrap', gap: 8 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontSize: 20, fontWeight: 800, letterSpacing: 2 }}>🌿 草刈りマネタイズ</span>
+          <span style={{ fontSize: 20, fontWeight: 800, letterSpacing: 2 }}>🌿 草刈りマネタイズ💰</span>
           {isAdmin && <span style={{ background: '#F7B731', color: '#2D2A26', borderRadius: 20, padding: '2px 10px', fontSize: 11, fontWeight: 700 }}>管理者</span>}
           <span style={{ background: syncBadge.bg, color: '#2D2A26', borderRadius: 20, padding: '3px 10px', fontSize: 11, fontWeight: 700 }}>{syncBadge.label}</span>
         </div>
