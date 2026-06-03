@@ -299,9 +299,9 @@ export default function App() {
           <img
             src='/kusa2.png'
             alt='logo'
-            style={{ height: 44, width: 44, borderRadius: '50%', objectFit: 'cover', border: '2px solid #F7B731', flexShrink: 0 }}
+            style={{ height: 64, width: 64, borderRadius: '50%', objectFit: 'cover', border: '2px solid #F7B731', flexShrink: 0 }}
           />
-          <span style={{ fontSize: 20, fontWeight: 800, letterSpacing: 2 }}>🌿 草刈りマネタイズ💰</span>
+          <span style={{ fontSize: 14, fontWeight: 800, letterSpacing: 1 }}>🌿 草刈りマネタイズ💰</span>
           {isAdmin && <span style={{ background: '#F7B731', color: '#2D2A26', borderRadius: 20, padding: '2px 10px', fontSize: 11, fontWeight: 700 }}>管理者</span>}
           <span style={{ background: syncBadge.bg, color: '#2D2A26', borderRadius: 20, padding: '3px 10px', fontSize: 11, fontWeight: 700 }}>{syncBadge.label}</span>
         </div>
