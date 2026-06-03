@@ -21,7 +21,6 @@ const TIME_SLOTS = [
   '16:00','16:30','17:00','17:30','18:00',
 ]
 
-const LOCATIONS = ['石の口', '吉井', '宿井１', '宿井２', '宿井３', '宿井４', '宿井５', '時貞１', '時貞２', '時貞３', '葛岡１', '葛岡２', '葛岡３', '葛岡４', '瀬戸']
 
 const WEEKDAYS = ['日','月','火','水','木','金','土']
 
@@ -433,14 +432,14 @@ export default function App() {
                               }}>+</button>
                             )}
                           </div>
-                          {/* 場所は管理者のみ表示 */}
-                          {isAdmin && location && (
+                          {/* イベント：全ユーザーに表示 */}
+                          {location && (
                             <div style={{
-                              background: '#4CAF50', color: '#fff', borderRadius: 3,
+                              background: '#7C3AED', color: '#fff', borderRadius: 3,
                               padding: '1px 3px', fontSize: 8, fontWeight: 700,
                               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                               marginBottom: 2,
-                            }}>📍{location}</div>
+                            }}>📌{location}</div>
                           )}
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                             {visibleShifts.map(sh => {
@@ -551,18 +550,23 @@ export default function App() {
               </h3>
               <button onClick={() => setDayDetail(null)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#999' }}>×</button>
             </div>
-            {/* 場所：管理者のみ編集・表示 */}
-            {isAdmin && (
-              <div style={{ background: '#F0FFF0', border: '1.5px solid #4CAF50', borderRadius: 10, padding: '12px 14px', marginBottom: 14 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: '#4CAF50', marginBottom: 6 }}>📍 草刈り場所</div>
-                <select
-                  value={getLocationForDate(dayDetail)}
-                  onChange={e => saveLocation(dayDetail, e.target.value)}
-                  style={{ width: '100%', padding: '8px 10px', borderRadius: 7, border: '1.5px solid #4CAF50', fontSize: 14, background: '#fff' }}
-                >
-                  <option value=''>未設定</option>
-                  {LOCATIONS.map(l => <option key={l} value={l}>{l}</option>)}
-                </select>
+            {/* イベント：管理者は編集、一般ユーザーは閲覧のみ */}
+            {(isAdmin || getLocationForDate(dayDetail)) && (
+              <div style={{ background: '#F5F0FF', border: '1.5px solid #7C3AED', borderRadius: 10, padding: '12px 14px', marginBottom: 14 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#7C3AED', marginBottom: 6 }}>📌 イベント</div>
+                {isAdmin ? (
+                  <input
+                    type="text"
+                    value={getLocationForDate(dayDetail)}
+                    onChange={e => saveLocation(dayDetail, e.target.value)}
+                    placeholder="イベント内容を入力"
+                    style={{ width: '100%', padding: '8px 10px', borderRadius: 7, border: '1.5px solid #7C3AED', fontSize: 14, background: '#fff', boxSizing: 'border-box' }}
+                  />
+                ) : (
+                  <div style={{ fontSize: 15, fontWeight: 700, color: '#2D2A26' }}>
+                    {getLocationForDate(dayDetail)}
+                  </div>
+                )}
               </div>
             )}
 
