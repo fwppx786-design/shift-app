@@ -59,6 +59,8 @@ export default function App() {
   const [liffReady, setLiffReady] = useState(false)
   const [staffLoaded, setStaffLoaded] = useState(false)
   const [dayDetail, setDayDetail] = useState(null)
+  // ▼ 追加: シフト編集用state
+  const [editShift, setEditShift] = useState(null)
 
   const isAdmin = lineUserId === ADMIN_USER_ID
   const myStaff = staff.find(s => s.lineUserId === lineUserId)
@@ -200,6 +202,31 @@ export default function App() {
     const updated = { ...shifts, [key]: (shifts[key] || []).filter(s => s.id !== shiftId) }
     setShifts(updated)
     setDeleteConfirm(null)
+    await saveShifts(updated)
+  }
+
+  // ▼ 追加: 編集モーダルを開く
+  function requestEditShift(day, sh) {
+    if (!isAdmin) return
+    setDayDetail(null)
+    setEditShift({ day, shiftId: sh.id, staffId: sh.staffId, start: sh.start, end: sh.end, hasBreak: sh.hasBreak })
+  }
+
+  // ▼ 追加: 編集を保存
+  async function confirmEditShift() {
+    if (!editShift) return
+    const { day, shiftId } = editShift
+    const key = dateKey(year, month, day)
+    const updated = {
+      ...shifts,
+      [key]: (shifts[key] || []).map(s =>
+        s.id === shiftId
+          ? { ...s, start: editShift.start, end: editShift.end, hasBreak: editShift.hasBreak }
+          : s
+      )
+    }
+    setShifts(updated)
+    setEditShift(null)
     await saveShifts(updated)
   }
 
@@ -592,11 +619,20 @@ export default function App() {
                             💴 {formatPay(hours)}
                           </div>
                         </div>
+                        {/* ▼ 管理者のみ編集・削除ボタンを横並びに表示 */}
                         {editable && (
-                          <button onClick={() => requestDeleteShift(dayDetail, sh.id, sh.staffId)} style={{
-                            background: '#FFE5E5', border: '1.5px solid #FF6B6B', borderRadius: 8,
-                            padding: '6px 12px', cursor: 'pointer', fontSize: 12, fontWeight: 700, color: '#FF6B6B',
-                          }}>削除</button>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            {isAdmin && (
+                              <button onClick={() => requestEditShift(dayDetail, sh)} style={{
+                                background: '#EFF6FF', border: '1.5px solid #45B7D1', borderRadius: 8,
+                                padding: '6px 12px', cursor: 'pointer', fontSize: 12, fontWeight: 700, color: '#45B7D1',
+                              }}>✏ 編集</button>
+                            )}
+                            <button onClick={() => requestDeleteShift(dayDetail, sh.id, sh.staffId)} style={{
+                              background: '#FFE5E5', border: '1.5px solid #FF6B6B', borderRadius: 8,
+                              padding: '6px 12px', cursor: 'pointer', fontSize: 12, fontWeight: 700, color: '#FF6B6B',
+                            }}>削除</button>
+                          </div>
                         )}
                       </div>
                     </div>
@@ -616,6 +652,82 @@ export default function App() {
                 cursor: 'pointer', fontSize: 14, fontWeight: 700,
               }}>＋ シフトを追加</button>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ▼ 追加: シフト編集モーダル（管理者専用） */}
+      {editShift && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(45,42,38,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
+          <div style={{ background: '#fff', borderRadius: 16, padding: '28px 24px', minWidth: 300, maxWidth: 400, width: '90%', boxShadow: '0 8px 40px rgba(0,0,0,0.18)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+              <h3 style={{ fontSize: 17, fontWeight: 800, margin: 0 }}>
+                ✏ シフト編集
+              </h3>
+              <button onClick={() => setEditShift(null)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#999' }}>×</button>
+            </div>
+
+            {/* スタッフ名表示（変更不可） */}
+            <div style={{ background: '#F8F6F1', borderRadius: 8, padding: '8px 12px', fontSize: 13, fontWeight: 600, marginBottom: 14 }}>
+              {getStaffById(editShift.staffId)?.name} ／ {month+1}月{editShift.day}日（{WEEKDAYS[new Date(year,month,editShift.day).getDay()]}）
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {/* 開始・終了時間 */}
+              <div style={{ display: 'flex', gap: 10 }}>
+                {[['start','開始時間'],['end','終了時間']].map(([key, label]) => (
+                  <label key={key} style={{ fontWeight: 700, fontSize: 13, flex: 1 }}>
+                    {label}
+                    <select
+                      value={editShift[key]}
+                      onChange={e => setEditShift(f => ({ ...f, [key]: e.target.value }))}
+                      style={{ display: 'block', width: '100%', marginTop: 4, padding: '8px 8px', borderRadius: 7, border: '1.5px solid #ddd', fontSize: 13 }}
+                    >
+                      {TIME_SLOTS.map(t => <option key={t}>{t}</option>)}
+                    </select>
+                  </label>
+                ))}
+              </div>
+
+              {/* 昼休憩 */}
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 6 }}>昼休憩</div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  {[true, false].map(val => (
+                    <button key={String(val)} onClick={() => setEditShift(f => ({ ...f, hasBreak: val }))} style={{
+                      flex: 1, padding: '9px', borderRadius: 8,
+                      border: `2px solid ${editShift.hasBreak === val ? '#4ECDC4' : '#ddd'}`,
+                      background: editShift.hasBreak === val ? '#E0F7F6' : '#fff',
+                      cursor: 'pointer', fontSize: 13, fontWeight: 700,
+                    }}>
+                      {val ? '☕ あり（−1時間）' : '🚫 なし'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* プレビュー */}
+              <div style={{ background: '#F8F6F1', borderRadius: 8, padding: '10px 14px', fontSize: 12, color: '#666', textAlign: 'center' }}>
+                実働時間：<strong style={{ color: '#2D2A26', fontSize: 14 }}>
+                  {calcHours(editShift.start, editShift.end, editShift.hasBreak)}時間
+                </strong>
+                　報酬：<strong style={{ color: '#4CAF50', fontSize: 14 }}>
+                  {formatPay(calcHours(editShift.start, editShift.end, editShift.hasBreak))}
+                </strong>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
+              <button onClick={() => setEditShift(null)} style={{
+                flex: 1, padding: '10px', borderRadius: 8, border: '1.5px solid #ddd',
+                background: '#fff', cursor: 'pointer', fontSize: 14, fontWeight: 600,
+              }}>キャンセル</button>
+              <button onClick={confirmEditShift} style={{
+                flex: 1, padding: '10px', borderRadius: 8, border: 'none',
+                background: '#2D2A26', color: '#F8F6F1',
+                cursor: 'pointer', fontSize: 14, fontWeight: 700,
+              }}>保存する</button>
+            </div>
           </div>
         </div>
       )}
